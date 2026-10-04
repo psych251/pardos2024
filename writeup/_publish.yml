@@ -1,0 +1,4 @@
+- source: replication-report.qmd
+  posit-connect-cloud:
+    - id: 01a1047e-91a0-071c-b5aa-11af81c580e1
+      url: https://connect.posit.cloud/eimonamjadi/content/01a1047e-91a0-071c-b5aa-11af81c580e1
