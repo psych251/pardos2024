@@ -49,9 +49,10 @@ exclusion rule, and the key comparison.
 library(tidyverse)
 library(jsonlite)
 
-# Must match EXPERIMENT.id in experiment.js, and the --experiment you passed to the export.
-# Phase 2 runs under its own id, so its data never mix with Phase 1's.
-experiment_id        <- "pardos2024-stats"
+# Must match EXPERIMENT.id in tutor/src/study/studyConfig.js, and the --experiment you pass to
+# the export. Pilot A runs under "pardos2024-pilot-a"; change both to the final id (for example
+# "pardos2024-stats") before final data collection. Phase 2 runs under its own id.
+experiment_id        <- "pardos2024-pilot-a"
 experiment_id_phase2 <- "pardos2024-stats-phase2"
 ```
 
@@ -95,6 +96,7 @@ List every AI tool you used on this project, what you used it for, and how you c
 | Tool and model | What it was used for | How you checked the output |
 |----|----|----|
 | ChatGPT | understanding the repository/template | looked through the repository myself and when I had a question about certain files asked ChatGPT and compared to what I had learn before in class/readings. |
+| Claude (claude-opus-5-5, agent session) | Built the experiment in `tutor/`: forked the authors' OATutor study platform, restricted it to the Statistics lesson, standardized pre/post item 3 across conditions, fixed a typo in practice item 3, added the course consent, debrief, device check, Prolific handling, and saving through the template's DataSaver. Wrote the analysis code chunks in this report (no text). Tested both with simulated participants. | *TO FILL IN: what you checked yourself* |
 | *e.g., Claude Code (Claude Opus 5)* | *Drafted the analysis code* | *Checked the exclusion counts by hand; confirmed the key test matches the preregistration* |
 | *e.g., ChatGPT* | *Comments on my draft of the Introduction (no text generated)* | *Decided which comments to act on and made every change myself; checked any factual claim against the source* |
 
@@ -112,80 +114,201 @@ One row per study for the key comparison: the original, your Phase 1 replication
 #| label: analysis-functions
 #| code-summary: "Show the analysis code (shared by Phase 1 and Phase 2)"
 
-# Load one phase's exported data and apply the exclusion rule. Returns NULL if that phase
-# has not been exported yet, which is how every section below knows to skip itself.
+# Condition codes in the data (tutor/src/study/studyConfig.js) and their labels here, in the
+# same order as the `original` table above.
+condition_labels <- c(none = "Control", human = "Human tutor", gpt = "ChatGPT")
+n_items <- c(pretest = 3, practice = 5, posttest = 3)
+
+# Key comparison: ChatGPT vs. Control. "ancova" = post-test regressed on condition with pre-test
+# as covariate (the difference in adjusted post-test means); "gain" = difference in mean gain
+# (post - pre), Welch t-test, which is the quantity the original study reported.
+# Set this to the key analysis you preregister.
+key_method <- "ancova"
+
+# Read every event for one phase, including any download-fallback files participants sent in.
+read_events <- function(dir) {
+  trials <- read_csv(file.path(dir, "trials.csv"), col_types = cols(.default = col_character()))
+  manual <- list.files(file.path(dir, "manual"), pattern = "\\.json$", full.names = TRUE)
+  if (length(manual) > 0) {
+    trials <- bind_rows(trials, map_dfr(manual, function(f) {
+      fromJSON(f, simplifyDataFrame = TRUE) |>
+        mutate(across(everything(), ~ if (is.list(.x)) map_chr(.x, ~ toJSON(.x, auto_unbox = TRUE)) else as.character(.x)),
+               participant_id = sub("^data-(.*)\\.json$", "\\1", basename(f)), trials_source = "manual")
+    }))
+  }
+  trials |>
+    mutate(time = ymd_hms(client_time, quiet = TRUE),
+           isCorrect = as.logical(toupper(isCorrect)),
+           is_preview = as.logical(toupper(is_preview)))
+}
+
+# Load one phase's exported data, build one row per participant, and apply the exclusion rule.
+# Returns NULL if that phase has not been exported yet, which is how every section below knows
+# to skip itself.
+#
+# The template saves one participant document per page load, so a participant who reloaded has
+# two documents. Every event carries a `session_key` (random, made in the participant's browser,
+# not an identifier), and participants are rebuilt from it.
 read_phase <- function(id) {
   dir <- file.path("..", "data", "raw", id)
   if (!all(file.exists(file.path(dir, c("participants.csv", "trials.csv"))))) return(NULL)
-  participants <- read_csv(file.path(dir, "participants.csv"), show_col_types = FALSE)
-  trials       <- read_csv(file.path(dir, "trials.csv"), show_col_types = FALSE)
-  errors_path  <- file.path(dir, "errors.csv")
+  docs   <- read_csv(file.path(dir, "participants.csv"), col_types = cols(.default = col_character()))
+  trials <- read_events(dir)
+  errors_path <- file.path(dir, "errors.csv")
   errors <- if (file.exists(errors_path)) read_csv(errors_path, show_col_types = FALSE) else tibble()
 
-  complete <- participants |> filter(completed)
+  # Page loads turned away before consent (phones and tablets) have no events.
+  n_unsupported <- sum(toupper(docs$device_supported) == "FALSE", na.rm = TRUE)
 
-  # Exclusion rule: replace with the rule you preregistered. Here: at least 6 of 8
-  # lexical-decision trials correct, and at least one speeded response at all (a session in
-  # which every speeded trial timed out is what a device without a keyboard produces).
-  ld <- trials |>
-    filter(task == "lexical_decision") |>
-    group_by(participant_id) |>
-    summarise(ld_acc           = mean(as.logical(correct), na.rm = TRUE),
-              ld_all_timed_out = all(as.logical(timed_out)),
+  # Each test item is answered once (no feedback, locked after submitting); use the first
+  # submission per item, which is also the first try on each practice item.
+  answers <- trials |>
+    filter(task == "answer") |>
+    arrange(session_key, time) |>
+    distinct(session_key, problemID, .keep_all = TRUE)
+
+  scores <- answers |>
+    filter(study_phase %in% names(n_items)) |>
+    group_by(session_key, study_phase) |>
+    summarise(items = n_distinct(problemID), score = 100 * mean(isCorrect), .groups = "drop") |>
+    pivot_wider(names_from = study_phase, values_from = c(items, score))
+  for (col in c(paste0("items_", names(n_items)), paste0("score_", names(n_items)))) {
+    if (!col %in% names(scores)) scores[[col]] <- NA_real_
+  }
+
+  phase_time <- function(task_name, ph) {
+    trials |> filter(task == task_name, phase == ph) |>
+      group_by(session_key) |> summarise(t = min(time), .groups = "drop")
+  }
+  timing <- phase_time("phase_start", "pretest") |> rename(t_start = t) |>
+    inner_join(phase_time("phase_complete", "posttest") |> rename(t_end = t), by = "session_key") |>
+    transmute(session_key, minutes = as.numeric(difftime(t_end, t_start, units = "mins")))
+  practice_time <- phase_time("phase_start", "practice") |> rename(t_start = t) |>
+    inner_join(phase_time("phase_complete", "practice") |> rename(t_end = t), by = "session_key") |>
+    transmute(session_key, practice_minutes = as.numeric(difftime(t_end, t_start, units = "mins")))
+
+  # Help used during practice: items where an authored hint was opened, and items where the
+  # answer itself (the "bottom-out" hint) was revealed.
+  help <- trials |>
+    filter(task == "hint_unlock", study_phase == "practice") |>
+    group_by(session_key) |>
+    summarise(items_authored_help = n_distinct(problemID[hintType != "bottomOut"]),
+              items_answer_revealed = n_distinct(problemID[hintType == "bottomOut"]),
               .groups = "drop")
-  checked <- complete |> left_join(ld, by = "participant_id")
-  keep <- checked |> filter(!is.na(ld_acc), !ld_all_timed_out, ld_acc >= 0.75)
+  practice_attempts <- trials |>
+    filter(task == "answer", study_phase == "practice") |>
+    count(session_key, name = "practice_attempts")
 
-  list(participants = participants, trials = trials, errors = errors,
-       complete = complete, keep = keep,
-       n_no_response = sum(checked$ld_all_timed_out %in% TRUE))
+  people <- trials |>
+    filter(!is.na(session_key)) |>
+    group_by(session_key) |>
+    summarise(condition_code = first(na.omit(condition)),
+              is_preview = any(is_preview %in% TRUE),
+              consented = any(task == "consent" & toupper(consented) == "TRUE"),
+              declined = any(task == "consent" & toupper(consented) == "FALSE"),
+              n_page_loads = n_distinct(participant_id),
+              .groups = "drop") |>
+    mutate(condition = factor(condition_labels[condition_code], levels = condition_labels)) |>
+    left_join(scores, by = "session_key") |>
+    left_join(timing, by = "session_key") |>
+    left_join(practice_time, by = "session_key") |>
+    left_join(help, by = "session_key") |>
+    left_join(practice_attempts, by = "session_key") |>
+    mutate(across(c(items_pretest, items_practice, items_posttest, items_authored_help,
+                    items_answer_revealed, practice_attempts), ~ replace_na(.x, 0)),
+           pre = score_pretest, post = score_posttest, gain = post - pre)
+
+  # Previews are visits without a Prolific id (for example, someone opening the live link).
+  n_preview <- sum(people$is_preview & people$consented)
+  started  <- people |> filter(consented, !is_preview)
+  complete <- started |> filter(items_pretest  >= n_items[["pretest"]],
+                                items_practice >= n_items[["practice"]],
+                                items_posttest >= n_items[["posttest"]])
+
+  # Exclusion rule: replace with the rule you preregistered. Here, as in the original study,
+  # participants are analysed if they completed every pre-test, practice and post-test item.
+  keep <- complete
+
+  list(participants = started, trials = trials, errors = errors, docs = docs,
+       complete = complete, keep = keep, answers = answers,
+       n_preview = n_preview, n_unsupported = n_unsupported,
+       n_declined = sum(people$declined & !people$is_preview))
 }
 
-# The key comparison's raw counts: how many analysed participants chose the risky program
-# in each frame.
-risky_counts <- function(d) {
-  d$trials |>
-    filter(task == "framing", participant_id %in% d$keep$participant_id) |>
-    group_by(condition) |>
-    summarise(risky = sum(choice == "risky"), n = n(), .groups = "drop")
+# The key statistic: ChatGPT minus Control, with a 95% CI. NULL until both conditions have at
+# least two analysed participants.
+key_effect <- function(keep, method = key_method) {
+  d <- keep |> filter(condition %in% c("Control", "ChatGPT")) |> droplevels()
+  if (any(table(d$condition) < 2) || nlevels(d$condition) < 2) return(NULL)
+  d$condition <- relevel(d$condition, ref = "Control")
+  if (method == "ancova") {
+    fit <- lm(post ~ condition + pre, data = d)
+    ci  <- confint(fit)["conditionChatGPT", ]
+    co  <- summary(fit)$coefficients["conditionChatGPT", ]
+    tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
+           statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
+           method = "ANCOVA-adjusted difference in post-test")
+  } else {
+    tt <- t.test(gain ~ condition, data = d)
+    tibble(N = nrow(d), estimate = unname(diff(tt$estimate)),
+           ci_low = -tt$conf.int[2], ci_high = -tt$conf.int[1],
+           statistic = -unname(tt$statistic), df = unname(tt$parameter), p = tt$p.value,
+           method = "difference in mean gain")
+  }
 }
 
-# The key statistic: difference in the proportion choosing the risky program (loss minus
-# gain) with a 95% CI, and the uncorrected chi-square, which is the same test. NULL until
-# both frames have at least one analysed participant.
-diff_ci <- function(counts) {
-  loss <- counts[counts$condition == "loss", ]
-  gain <- counts[counts$condition == "gain", ]
-  if (nrow(loss) == 0 || nrow(gain) == 0) return(NULL)
-  pt <- prop.test(c(loss$risky, gain$risky), c(loss$n, gain$n), correct = FALSE)
-  tibble(N = loss$n + gain$n,
-         estimate = unname(pt$estimate[1] - pt$estimate[2]),
-         ci_low = pt$conf.int[1], ci_high = pt$conf.int[2],
-         statistic = unname(pt$statistic), p = pt$p.value)
+# The original study's effect: difference in mean gain, ChatGPT minus Control (Welch interval
+# if the SDs of the gains are filled in at the top of this file).
+original_effect <- function(orig = original) {
+  c0 <- orig |> filter(condition == "Control")
+  g  <- orig |> filter(condition == "ChatGPT")
+  est <- g$gain - c0$gain
+  if (anyNA(c(g$sd_gain, c0$sd_gain))) {
+    return(tibble(N = c0$n + g$n, estimate = est, ci_low = NA_real_, ci_high = NA_real_,
+                  statistic = NA_real_, df = NA_real_, p = NA_real_, method = "difference in mean gain"))
+  }
+  se <- sqrt(g$sd_gain^2 / g$n + c0$sd_gain^2 / c0$n)
+  df <- se^4 / ((g$sd_gain^2 / g$n)^2 / (g$n - 1) + (c0$sd_gain^2 / c0$n)^2 / (c0$n - 1))
+  tibble(N = c0$n + g$n, estimate = est, ci_low = est - qt(0.975, df) * se,
+         ci_high = est + qt(0.975, df) * se, statistic = est / se, df = df,
+         p = 2 * pt(-abs(est / se), df), method = "difference in mean gain")
 }
 
-# Side-by-side figure: any number of studies on the same axes, in the order given.
-prop_ci <- function(x, n) {
-  ci <- prop.test(x, n, correct = FALSE)$conf.int
-  tibble(p = x / n, low = ci[1], high = ci[2])
+# Mean gain and 95% CI per condition, in the shape the comparison plot needs.
+gain_summary <- function(keep) {
+  keep |>
+    group_by(condition, .drop = FALSE) |>
+    summarise(n = n(), gain_mean = mean(gain),
+              se = if (n() > 1) sd(gain) / sqrt(n()) else NA_real_, .groups = "drop") |>
+    mutate(low = gain_mean - qt(0.975, pmax(n - 1, 1)) * se,
+           high = gain_mean + qt(0.975, pmax(n - 1, 1)) * se)
 }
+original_gain_summary <- function(orig = original) {
+  orig |>
+    transmute(condition = factor(condition, levels = condition_labels), n, gain_mean = gain,
+              se = sd_gain / sqrt(n),
+              low = gain_mean - qt(0.975, n - 1) * se, high = gain_mean + qt(0.975, n - 1) * se)
+}
+
+# Side-by-side figure: mean learning gain per condition for any number of studies, same axes.
 comparison_plot <- function(...) {
   studies <- list(...)
   studies <- studies[!map_lgl(studies, ~ is.null(.x) || nrow(.x) == 0)]
   df <- imap_dfr(studies, ~ mutate(.x, Study = .y)) |>
-    rowwise() |> mutate(prop_ci(risky, n)) |> ungroup() |>
     mutate(Study = factor(Study, levels = names(studies)), label = sprintf("n = %d", n))
   fills <- setNames(c("grey55", "#1E6E76", "#B8792A")[seq_along(studies)], names(studies))
-  dodge <- position_dodge(width = 0.8)
-  ggplot(df, aes(x = condition, y = p, fill = Study)) +
-    geom_col(position = dodge, width = 0.75) +
-    geom_errorbar(aes(ymin = low, ymax = high), position = dodge, width = 0.2) +
-    geom_text(aes(y = 0.02, label = label), position = dodge, vjust = 0, size = 3, colour = "white") +
-    scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
-    scale_fill_manual(values = fills) +
-    labs(x = "Frame", y = "Chose the risky program", fill = NULL) +
+  dodge <- position_dodge(width = 0.6)
+  ggplot(df, aes(x = condition, y = gain_mean, colour = Study, group = Study)) +
+    geom_hline(yintercept = 0, colour = "grey80") +
+    geom_errorbar(aes(ymin = low, ymax = high), position = dodge, width = 0, linewidth = 0.8,
+                  na.rm = TRUE) +
+    geom_point(position = dodge, size = 3) +
+    geom_text(aes(label = label), position = dodge, hjust = -0.3, size = 3, colour = "grey30",
+              show.legend = FALSE) +
+    scale_colour_manual(values = fills) +
+    labs(x = NULL, y = "Learning gain (post-test minus pre-test, points)", colour = NULL) +
     theme_minimal(base_size = 12) +
-    theme(legend.position = "top")
+    theme(legend.position = "top", panel.grid.major.x = element_blank())
 }
 
 phase1 <- read_phase(experiment_id)
@@ -199,22 +322,23 @@ have_phase2 <- !is.null(phase2)
 #| echo: false
 fmt_row <- function(study, r) {
   if (is.null(r)) {
-    return(tibble(Study = study, N = "", `Effect (loss − gain)` = "not yet collected",
-                  `95% CI` = "", `χ²(1)` = "", p = ""))
+    return(tibble(Study = study, N = "", `Effect (ChatGPT − Control)` = "not yet collected",
+                  `95% CI` = "", Test = "", p = ""))
   }
   tibble(Study = study, N = as.character(r$N),
-         `Effect (loss − gain)` = sprintf("%.0f points", 100 * r$estimate),
-         `95% CI` = sprintf("[%.0f, %.0f]", 100 * r$ci_low, 100 * r$ci_high),
-         `χ²(1)` = sprintf("%.2f", r$statistic),
-         p = format.pval(r$p, digits = 2, eps = 0.001))
+         `Effect (ChatGPT − Control)` = sprintf("%.1f points", r$estimate),
+         `95% CI` = if (is.na(r$ci_low)) "" else sprintf("[%.1f, %.1f]", r$ci_low, r$ci_high),
+         Test = if (is.na(r$statistic)) "" else sprintf("t(%.0f) = %.2f", r$df, r$statistic),
+         p = if (is.na(r$p)) "" else format.pval(r$p, digits = 2, eps = 0.001))
 }
 bind_rows(
-  fmt_row("Original", diff_ci(original)),
-  fmt_row("Phase 1: replication", if (have_data) diff_ci(risky_counts(phase1))),
-  fmt_row("Phase 2: extension", if (have_phase2) diff_ci(risky_counts(phase2)))
+  fmt_row("Original", original_effect()),
+  fmt_row("Phase 1: replication", if (have_data) key_effect(phase1$keep)),
+  fmt_row("Phase 2: extension", if (have_phase2) key_effect(phase2$keep))
 ) |>
   knitr::kable(align = "lrlllr",
-               caption = "Key comparison: difference in the percentage of analysed participants choosing the risky program, loss frame minus gain frame.")
+               caption = sprintf("Key comparison, ChatGPT minus Control, in percentage points. Original: difference in mean learning gain (Table 2; the interval needs the SDs of the gains). Replication: %s.",
+                                 if (key_method == "ancova") "difference in post-test score adjusted for pre-test score (ANCOVA)" else "difference in mean learning gain (Welch t-test)"))
 ```
 
 # Phase 1: Replication
@@ -356,22 +480,21 @@ if (!have_data) {
 #| label: phase1-data
 #| eval: !expr have_data
 # Loaded and excluded by read_phase(), under Key statistics, so Phase 1 and Phase 2 share one
-# exclusion rule.
+# exclusion rule. One row per participant in `participants`, `complete` and `keep`.
 participants  <- phase1$participants
 trials        <- phase1$trials
 errors        <- phase1$errors
 complete      <- phase1$complete
 keep          <- phase1$keep
-n_no_response <- phase1$n_no_response
 ```
 
 ```{r}
 #| label: funnel
 #| eval: !expr have_data
-funnel_levels <- c("Started", "Completed", "Passed exclusion criteria")
+funnel_levels <- c("Consented", "Completed all items", "Passed exclusion criteria")
 bind_rows(
-  participants |> mutate(step = "Started"),
-  complete     |> mutate(step = "Completed"),
+  participants |> mutate(step = "Consented"),
+  complete     |> mutate(step = "Completed all items"),
   keep         |> mutate(step = "Passed exclusion criteria")
 ) |>
   mutate(step = factor(step, levels = funnel_levels)) |>
@@ -379,7 +502,7 @@ bind_rows(
   pivot_wider(names_from = condition, values_from = n, values_fill = 0) |>
   mutate(Total = rowSums(across(-step))) |>
   rename(Step = step) |>
-  knitr::kable(caption = "Participants at each step, by frame. Differences between frames in attrition or exclusion are a threat to validity and should be discussed.")
+  knitr::kable(caption = "Participants at each step, by condition. Differences between conditions in attrition or exclusion are a threat to validity and should be discussed.")
 ```
 
 ```{r}
@@ -387,12 +510,13 @@ bind_rows(
 #| eval: !expr have_data
 #| echo: false
 #| results: asis
-cat(sprintf("Of %d participants who started, %d completed the study and %d met the exclusion criteria.",
+cat(sprintf("Of %d participants who consented, %d completed every pre-test, practice and post-test item and %d met the exclusion criteria.",
             nrow(participants), nrow(complete), nrow(keep)))
-if (n_no_response > 0) {
-  cat(sprintf(" %d completed session(s) contained no response to any speeded trial and were excluded on that basis.",
-              n_no_response))
-}
+if (phase1$n_declined > 0) cat(sprintf(" %d declined consent.", phase1$n_declined))
+if (phase1$n_unsupported > 0) cat(sprintf(" %d visit(s) from phones or tablets were turned away before consent.", phase1$n_unsupported))
+if (phase1$n_preview > 0) cat(sprintf(" %d preview session(s) without a Prolific id were not counted.", phase1$n_preview))
+reloads <- sum(keep$n_page_loads > 1)
+if (reloads > 0) cat(sprintf(" %d analysed participant(s) reloaded the page during the study; their records were joined.", reloads))
 if (nrow(keep) == 0) cat(" No participants remain for analysis yet, so the results below are empty.")
 cat("\n")
 ```
@@ -400,22 +524,21 @@ cat("\n")
 ```{r}
 #| label: demographics
 #| eval: !expr have_data
-demo <- trials |>
-  filter(task == "demographics", participant_id %in% keep$participant_id) |>
-  mutate(resp = map(response, ~ fromJSON(.x))) |>
-  transmute(
-    participant_id,
-    age    = map_dbl(resp, ~ as.numeric(.x$age %||% NA)),
-    gender = map_chr(resp, ~ as.character(.x$gender %||% NA))
-  )
+# The background questions used in the original study (Statistics condition).
+background <- phase1$answers |>
+  filter(study_phase == "intro", session_key %in% keep$session_key) |>
+  mutate(question = recode(sub(".*IntroStats([0-9]).*", "\\1", problemID),
+                           `1` = "Age group", `2` = "Taken a statistics course",
+                           `3` = "Taken college math courses"),
+         answer = gsub("\\$\\$", "", input))
 
-if (nrow(demo) > 0) {
-  demo |>
-    summarise(N = n(), `Mean age` = round(mean(age, na.rm = TRUE), 1),
-              `SD age` = round(sd(age, na.rm = TRUE), 1),
-              `Age not given` = sum(is.na(age))) |>
-    knitr::kable(caption = "Age of the analysed sample.")
-}
+background |>
+    count(question, answer) |>
+    group_by(question) |>
+    mutate(percent = sprintf("%.0f%%", 100 * n / sum(n))) |>
+    ungroup() |>
+    rename(Question = question, Answer = answer, N = n, Percent = percent) |>
+    knitr::kable(caption = "Background questions, analysed sample.")
 ```
 
 #### Deviations from the preregistered plan
@@ -439,23 +562,30 @@ Data preparation follows the analysis plan. Loading and exclusions are done by t
 ### Confirmatory analysis
 
 ```{r}
+#| label: confirmatory-descriptives
+#| eval: !expr have_data
+enough_for_tests <- n_distinct(keep$condition) == 3 && all(table(keep$condition) >= 2)
+keep |>
+  group_by(Condition = condition, .drop = FALSE) |>
+  summarise(N = n(), `Pre-test` = sprintf("%.1f%%", mean(pre)), `Post-test` = sprintf("%.1f%%", mean(post)),
+            Gain = sprintf("%+.1f", mean(gain)), `SD gain` = sprintf("%.1f", sd(gain)), .groups = "drop") |>
+  knitr::kable(caption = "Scores by condition: percentage of the three test items correct, analysed sample.")
+```
+
+```{r}
 #| label: confirmatory
 #| eval: !expr have_data
-framing <- trials |>
-  filter(task == "framing", participant_id %in% keep$participant_id) |>
-  select(participant_id, condition, choice)
-risky <- risky_counts(phase1)
-tab <- table(Frame = framing$condition, Choice = framing$choice)
-
-if (all(dim(tab) == c(2, 2))) {
-  # No continuity correction, so this test and the effect-size interval below agree: the
-  # uncorrected 2 x 2 chi-square is the same test as the two-proportion comparison.
-  print(tab)
-  print(chisq.test(tab, correct = FALSE))
+if (enough_for_tests) {
+  # ANCOVA: post-test on condition, controlling for pre-test; Control is the reference group.
+  fit <- lm(post ~ condition + pre, data = keep |> mutate(condition = relevel(condition, "Control")))
+  print(summary(fit))
+  # Omnibus test of condition, controlling for pre-test.
+  print(anova(lm(post ~ pre, data = keep), fit))
+  # Key comparison (ChatGPT − Control), as reported in Key statistics.
+  print(key_effect(keep))
 } else {
-  message("Chi-square not run: the frame-by-choice table is ", paste(dim(tab), collapse = " x "),
-          ". It needs both frames and both choices; with ", nrow(framing),
-          " participant(s) in the analysis set this is expected.")
+  message("Confirmatory analysis not run yet: it needs at least two analysed participants in each of the three conditions (currently ",
+          paste(names(table(keep$condition)), table(keep$condition), sep = " = ", collapse = ", "), ").")
 }
 ```
 
@@ -470,18 +600,18 @@ Judge the replication on effect sizes, not only on whether the key test is signi
 ```{r}
 #| label: comparison
 #| eval: !expr have_data
-orig <- diff_ci(original)
-rep  <- diff_ci(risky)
+orig <- original_effect()
+rep  <- key_effect(keep)
 
 if (!is.null(rep)) {
   bind_rows(orig |> mutate(Study = "Original"), rep |> mutate(Study = "Phase 1: replication")) |>
-    transmute(Study, N,
-              `Difference (loss − gain)` = sprintf("%.0f points", 100 * estimate),
-              `95% CI` = sprintf("[%.0f, %.0f]", 100 * ci_low, 100 * ci_high),
-              p = format.pval(p, digits = 2, eps = 0.001)) |>
-    knitr::kable(caption = "Effect size: difference in the percentage choosing the risky program.")
+    transmute(Study, N, Measure = method,
+              `Difference (ChatGPT − Control)` = sprintf("%.1f points", estimate),
+              `95% CI` = ifelse(is.na(ci_low), "", sprintf("[%.1f, %.1f]", ci_low, ci_high)),
+              p = ifelse(is.na(p), "", format.pval(p, digits = 2, eps = 0.001))) |>
+    knitr::kable(caption = "Effect size: ChatGPT minus Control, in percentage points.")
 } else {
-  message("Replication effect size not computed yet: need at least one analysed participant in each frame.")
+  message("Replication effect size not computed yet: need at least two analysed participants in both the ChatGPT and Control conditions.")
 }
 ```
 
@@ -494,10 +624,10 @@ if (!is.null(rep)) {
   excludes_zero <- rep$ci_low > 0 | rep$ci_high < 0
   includes_orig <- orig$estimate >= rep$ci_low & orig$estimate <= rep$ci_high
   cat(sprintf(
-    "The replication's 95%% interval %s zero and %s the original estimate of %.0f points. ",
+    "The replication's 95%% interval %s zero and %s the original estimate of %.1f points. ",
     if (excludes_zero) "excludes" else "includes",
     if (includes_orig) "includes" else "does not include",
-    100 * orig$estimate))
+    orig$estimate))
   cat("These two facts are the starting point for the summary in the Discussion, not the conclusion.\n")
 }
 ```
@@ -529,10 +659,10 @@ Whichever you choose, use the same measure, scale, condition order and error-bar
 ```{r}
 #| label: fig-comparison
 #| eval: !expr have_data
-#| fig-cap: "Percentage choosing the risky program in each frame, original study and Phase 1 replication. Error bars are 95% confidence intervals."
+#| fig-cap: "Mean learning gain (post-test minus pre-test, percentage points) in each condition: original study (Pardos & Bhandari, 2024, Table 2, Statistics) and Phase 1 replication. Error bars are 95% confidence intervals; the original's appear once the SDs of its gains are entered at the top of this file."
 #| fig-width: 7
 #| fig-height: 4
-comparison_plot(Original = original, `Phase 1: replication` = risky)
+comparison_plot(Original = original_gain_summary(), `Phase 1: replication` = gain_summary(keep))
 ```
 
 ### Exploratory analyses
@@ -544,21 +674,61 @@ Any follow-up analyses (optional). Label them clearly as exploratory: they were 
 :::
 
 ```{r}
-#| label: exploratory-rt
+#| label: exploratory-original-tests
 #| eval: !expr have_data
-ld <- trials |>
-  filter(task == "lexical_decision", participant_id %in% keep$participant_id) |>
-  mutate(correct = as.logical(correct), is_word = as.logical(is_word), rt = as.numeric(rt)) |>
-  filter(correct, !is.na(rt))
-
-if (nrow(ld) > 0) {
-  ld |>
-    group_by(`Real word` = is_word) |>
-    summarise(`Mean RT (ms)` = round(mean(rt)), `SD (ms)` = round(sd(rt)), Trials = n(), .groups = "drop") |>
-    knitr::kable(caption = "Exploratory: lexical-decision response times, correct trials only.")
+# The original paper's analysis, for one subject: Kruskal-Wallis on gains across conditions,
+# then Dunn's pairwise tests (reported unadjusted in the paper; Holm-adjusted here as well).
+enough_for_ranks <- n_distinct(keep$condition) == 3 && all(table(keep$condition) >= 3)
+if (enough_for_ranks) {
+  print(kruskal.test(gain ~ condition, data = keep))
+  r <- rank(keep$gain); N <- length(r)
+  ties <- table(keep$gain); tie_term <- sum(ties^3 - ties) / (12 * (N - 1))
+  mean_rank <- tapply(r, keep$condition, mean); n_c <- table(keep$condition)
+  pairs <- list(c("Control", "ChatGPT"), c("Control", "Human tutor"), c("Human tutor", "ChatGPT"))
+  map_dfr(pairs, function(pr) {
+    z <- (mean_rank[[pr[2]]] - mean_rank[[pr[1]]]) /
+      sqrt((N * (N + 1) / 12 - tie_term) * (1 / n_c[[pr[1]]] + 1 / n_c[[pr[2]]]))
+    tibble(Comparison = paste(pr[2], "vs", pr[1]), z = round(z, 2), p = 2 * pnorm(-abs(z)))
+  }) |>
+    mutate(`p (Holm)` = p.adjust(p, "holm"),
+           across(c(p, `p (Holm)`), ~ format.pval(.x, digits = 2, eps = 0.001))) |>
+    knitr::kable(caption = "Exploratory: Dunn's tests on learning gains (the original study's post hoc test). Positive z: the first condition's gains rank higher.")
 } else {
-  message("No correct lexical-decision trials with a response time yet.")
+  message("Rank-based tests not run yet: they need at least three analysed participants per condition.")
 }
+```
+
+```{r}
+#| label: exploratory-prepost
+#| eval: !expr have_data
+# Within each condition, pre-test vs. post-test. The original used a Kruskal-Wallis test here;
+# the paired Wilcoxon signed-rank test respects that each participant contributes both scores.
+if (enough_for_ranks) {
+  keep |>
+    group_by(Condition = condition) |>
+    summarise(N = n(),
+              `p (Wilcoxon, paired)` = if (any(post != pre)) wilcox.test(post, pre, paired = TRUE, exact = FALSE)$p.value else NA_real_,
+              `p (Kruskal-Wallis, as original)` = kruskal.test(list(pre, post))$p.value,
+              .groups = "drop") |>
+    mutate(across(starts_with("p "), ~ format.pval(.x, digits = 2, eps = 0.001))) |>
+    knitr::kable(caption = "Exploratory: pre-test vs. post-test within each condition.")
+}
+```
+
+```{r}
+#| label: exploratory-process
+#| eval: !expr have_data
+# Time on task and help used during practice.
+keep |>
+  group_by(Condition = condition, .drop = FALSE) |>
+  summarise(N = n(),
+            `Minutes, pre-test to post-test` = round(median(minutes, na.rm = TRUE), 1),
+            `Practice minutes` = round(median(practice_minutes, na.rm = TRUE), 1),
+            `Practice attempts` = round(mean(practice_attempts), 1),
+            `Items with authored help opened (of 5)` = round(mean(items_authored_help), 1),
+            `Items with answer revealed (of 5)` = round(mean(items_answer_revealed), 1),
+            .groups = "drop") |>
+  knitr::kable(caption = "Exploratory: time (medians) and help use during practice (means). The Control condition has no authored help; its only help is the answer.")
 ```
 
 ```{r}
@@ -644,41 +814,25 @@ Justify the Phase 2 sample, and **state how you expect the estimate and its prec
 #| eval: false
 phase2_n_per_group <- 150   # planned analysed participants per condition in Phase 2
 
-p1_counts <- if (have_data) risky_counts(phase1)
-p1_stats  <- if (have_data) diff_ci(p1_counts)
-basis <- if (!is.null(p1_stats)) {
-  list(gain = p1_counts$risky[p1_counts$condition == "gain"] / p1_counts$n[p1_counts$condition == "gain"],
-       loss = p1_counts$risky[p1_counts$condition == "loss"] / p1_counts$n[p1_counts$condition == "loss"],
-       source = "Phase 1")
+p1 <- if (have_data) key_effect(phase1$keep)
+sd_basis <- if (have_data && nrow(phase1$keep) > 2) {
+  phase1$keep |> filter(condition %in% c("Control", "ChatGPT")) |> group_by(condition) |>
+    summarise(s = sd(gain)) |> pull(s) |> mean()
 } else {
-  list(gain = original_p_gain, loss = original_p_loss, source = "the original study")
+  mean(original$sd_gain[original$condition %in% c("Control", "ChatGPT")])
 }
+if (is.na(sd_basis)) stop("Need the SD of gains: from Phase 1 data or `sd_gain` in the original-study chunk.")
 
-# Expected 95% CI half-width on the difference at n per condition.
-half_width <- function(n) 1.96 * sqrt(basis$gain * (1 - basis$gain) / n + basis$loss * (1 - basis$loss) / n)
-power_at <- function(n, p1, p2) {
-  tryCatch(power.prop.test(n = n, p1 = p1, p2 = p2, sig.level = 0.05)$power, error = function(e) NA)
-}
-
-rows <- tibble(
-  Study = c(if (!is.null(p1_stats)) "Phase 1 (actual)", "Phase 2 (planned)"),
-  `N analysed` = c(if (!is.null(p1_stats)) p1_stats$N, 2 * phase2_n_per_group),
-  `95% CI half-width` = c(if (!is.null(p1_stats)) sprintf("±%.0f points", 100 * (p1_stats$ci_high - p1_stats$ci_low) / 2),
-                          sprintf("±%.0f points (expected)", 100 * half_width(phase2_n_per_group)))
-)
-knitr::kable(rows, caption = sprintf("Precision of the key estimate, Phase 2 expected values based on %s.", basis$source))
-
-tibble(
-  `Effect to detect` = c(sprintf("Original: %.0f points", 100 * (original_p_loss - original_p_gain)),
-                         if (!is.null(p1_stats)) sprintf("Phase 1: %.0f points", 100 * p1_stats$estimate),
-                         sprintf("Half the original: %.0f points", 50 * (original_p_loss - original_p_gain))),
-  `Power at planned N` = scales::percent(c(
-    power_at(phase2_n_per_group, original_p_gain, original_p_loss),
-    if (!is.null(p1_stats)) power_at(phase2_n_per_group, basis$gain, basis$loss),
-    power_at(phase2_n_per_group, original_p_gain, original_p_gain + (original_p_loss - original_p_gain) / 2)
-  ), accuracy = 1)
-) |>
-  knitr::kable(caption = sprintf("Power of the Phase 2 key test at %d per condition, two-sided alpha = .05.", phase2_n_per_group))
+effects <- c(Original = original_effect()$estimate,
+             if (!is.null(p1)) c(`Phase 1` = p1$estimate),
+             `Half the original` = original_effect()$estimate / 2)
+tibble(`Effect to detect` = sprintf("%s: %.1f points", names(effects), effects),
+       `Power at planned N` = scales::percent(map_dbl(effects, ~ power.t.test(
+         n = phase2_n_per_group, delta = .x, sd = sd_basis, sig.level = 0.05)$power), accuracy = 1),
+       `Expected 95% CI half-width` = sprintf("±%.1f points",
+         qt(0.975, 2 * phase2_n_per_group - 2) * sd_basis * sqrt(2 / phase2_n_per_group))) |>
+  knitr::kable(caption = sprintf("Phase 2 key test (ChatGPT − Control gain) at %d per condition, two-sided alpha = .05, SD of gains = %.1f.",
+                                 phase2_n_per_group, sd_basis))
 ```
 
 ## Analysis plan
@@ -711,14 +865,13 @@ if (!have_phase2) {
 ```{r}
 #| label: phase2-results
 #| eval: !expr have_phase2
-p2_counts <- risky_counts(phase2)
-p2_stats  <- diff_ci(p2_counts)
-cat(sprintf("Phase 2: %d started, %d completed, %d analysed.\n",
+p2_stats <- key_effect(phase2$keep)
+cat(sprintf("Phase 2: %d consented, %d completed all items, %d analysed.\n",
             nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
 if (!is.null(p2_stats)) {
   p_text <- if (p2_stats$p < 0.001) "p < .001" else sprintf("p = %.3f", p2_stats$p)
-  cat(sprintf("Key comparison: %.0f points [%.0f, %.0f], chi-square(1) = %.2f, %s.\n",
-              100 * p2_stats$estimate, 100 * p2_stats$ci_low, 100 * p2_stats$ci_high,
+  cat(sprintf("Key comparison (ChatGPT − Control): %.1f points [%.1f, %.1f], t(%.0f) = %.2f, %s.\n",
+              p2_stats$estimate, p2_stats$ci_low, p2_stats$ci_high, p2_stats$df,
               p2_stats$statistic, p_text))
 }
 ```
@@ -726,12 +879,12 @@ if (!is.null(p2_stats)) {
 ```{r}
 #| label: fig-phase2
 #| eval: !expr have_phase2
-#| fig-cap: "Percentage choosing the risky program in each frame: original study, Phase 1 replication, and Phase 2 extension. Error bars are 95% confidence intervals."
+#| fig-cap: "Mean learning gain in each condition: original study, Phase 1 replication, and Phase 2 extension. Error bars are 95% confidence intervals."
 #| fig-width: 8
 #| fig-height: 4
-comparison_plot(Original = original,
-                `Phase 1: replication` = if (have_data) risky_counts(phase1),
-                `Phase 2: extension` = risky_counts(phase2))
+comparison_plot(Original = original_gain_summary(),
+                `Phase 1: replication` = if (have_data) gain_summary(phase1$keep),
+                `Phase 2: extension` = gain_summary(phase2$keep))
 ```
 
 ## Discussion

@@ -1,0 +1,54 @@
+# Builds the OATutor experiment in tutor/ and publishes it with GitHub Pages.
+#
+# The template's own experiment needs no build, so the student guide deploys "from a branch".
+# This study runs on the original authors' OATutor platform (a React app), which must be built
+# first, so Pages is set to deploy from this workflow instead:
+#   repo -> Settings -> Pages -> Build and deployment -> Source: GitHub Actions
+#
+# The build copies firebase-config.js, lib/firebase-bundle.js and src/save.js from the
+# repository root (tutor/scripts/sync-template.js), so data are saved exactly as the template saves them.
+name: deploy-pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tutor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tutor/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          CI: false
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tutor/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
