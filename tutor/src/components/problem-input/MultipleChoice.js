@@ -22,10 +22,12 @@ class MultipleChoice extends React.Component {
     };
 
     render() {
-        let { choices: _choices = [], variabilization } = this.props;
+        let { choices: _choices = [], variabilization, fixedOrder } = this.props;
 
-        const choices = []
-        if (Array.isArray(_choices)) {
+        let choices = []
+        if (fixedOrder && Array.isArray(_choices)) {
+            choices = [...new Set(_choices)];
+        } else if (Array.isArray(_choices)) {
             [...new Set(_choices)].forEach(choice => {
                 // "... above" choices and the course-required decline option stay last.
                 if (choice.includes(" above") || choice === "Prefer not to say") {
