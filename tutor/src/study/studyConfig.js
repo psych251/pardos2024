@@ -55,7 +55,7 @@ export const EXPERIMENT = {
     save_full_data_at_end: true,
 
     // From your Prolific study page. Empty = no redirect (pilots, local testing).
-    prolific_completion_code: "",
+    prolific_completion_code: "CO2XQRNO",
 
     // Contact shown in consent, debrief and the download fallback. The course consent
     // text may only be changed in this address.
