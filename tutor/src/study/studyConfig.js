@@ -46,7 +46,7 @@ export const EXPERIMENT = {
     // Firestore path: experiments/<id>/participants/... Change it between phases so pilot
     // and real data never mix (pardos2024-pilot-a -> pardos2024-pilot-b -> pardos2024-stats),
     // and keep `experiment_id` at the top of writeup/replication-report.qmd the same.
-    id: "pardos2024-pilot-a",
+    id: "pardos2024-pilot-b",
 
     // Events per Firestore write. A full session logs about 60 events.
     chunk_size: 5,

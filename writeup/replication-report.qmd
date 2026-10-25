@@ -52,7 +52,7 @@ library(jsonlite)
 # Must match EXPERIMENT.id in tutor/src/study/studyConfig.js, and the --experiment you pass to
 # the export. Pilot A runs under "pardos2024-pilot-a"; change both to the final id (for example
 # "pardos2024-stats") before final data collection. Phase 2 runs under its own id.
-experiment_id        <- "pardos2024-pilot-a"
+experiment_id        <- "pardos2024-pilot-b"
 experiment_id_phase2 <- "pardos2024-stats-phase2"
 ```
 
@@ -68,7 +68,10 @@ original <- tibble(
   pre       = c(51.48, 42.82, 39.09),
   post      = c(43.90, 53.93, 57.93),
   gain      = c(-7.56, 11.10, 18.83),
-  sd_gain   = c(NA, NA, NA)   
+  # SD of learning gain (points), computed from the authors' participant data, Statistics rows
+  # (lesson "Independent and mutually exclusive events"): Participants.csv,
+  # https://doi.org/10.6084/m9.figshare.23935269. Ns and means there match Table 2 exactly.
+  sd_gain   = c(33.99, 38.48, 28.11)
 )
 ```
 
@@ -77,7 +80,7 @@ original <- tibble(
 
 - **Original paper:** Pardos, Z. A., & Bhandari, S. (2024). ChatGPT-generated help produces learning gains equivalent to human tutor-authored help on mathematics skills. *PLOS ONE, 19*(5), e0304013. <https://doi.org/10.1371/journal.pone.0304013>
 - **Preregistration:** [OSF registration](https://osf.io/XXXXX) *(registered YYYY-MM-DD, before final data collection)*
-- **Live experiment:** <https://psych251.github.io/your-repo/> (take the study exactly as participants did)
+- **Live experiment:** <https://psych251.github.io/pardos2024/> (take the study exactly as participants did)
 - **Repository:** <https://github.com/psych251/pardos2024> (experiment code, data, and this report)
 :::
 
@@ -94,10 +97,10 @@ List every AI tool you used on this project, what you used it for, and how you c
 :::
 
 | Tool and model | What it was used for | How you checked the output |
-|----|----|----|
+|------------------------|------------------------|------------------------|
 | ChatGPT | understanding the repository/template | looked through the repository myself and when I had a question about certain files asked ChatGPT and compared to what I had learn before in class/readings. |
-| Claude (claude-opus-5-5, agent session) | Built the experiment in `tutor/`: forked the authors' OATutor study platform, restricted it to the Statistics lesson, standardized pre/post item 3 across conditions, fixed a typo in practice item 3, added the course consent, debrief, device check, Prolific handling, and saving through the template's DataSaver. Wrote the analysis code chunks in this report (no text). Tested both with simulated participants. | *TO FILL IN: what you checked yourself* |
-| *e.g., Claude Code (Claude Opus 5)* | *Drafted the analysis code* | *Checked the exclusion counts by hand; confirmed the key test matches the preregistration* |
+| Claude (claude-opus-5.5) | Built the experiment in `tutor/`: forked the authors' OATutor study platform, restricted it to the Statistics lesson, standardized pre/post item 3 across conditions, fixed a typo in practice item 3, added the course consent, debrief, device check, Prolific handling, and saving through the template's DataSaver. Wrote the analysis code chunks in this report (no text). | I looked through the code and checked with the original data to ensure that the Claude did not make any mistakes. I also ran the experiment a few times myself to ensure that all parts ran smoothly and to catch bugs, which I then communicated to Claude and made sure they were fixed and reran the experiment to ensure. |
+| Claude Chat (Claude Opus 5.5) | Drafted the analysis code | Checked the analysis code and got feedback from class TA, and made adjustments for how another analysis I could do would be better for this project. |
 | *e.g., ChatGPT* | *Comments on my draft of the Introduction (no text generated)* | *Decided which comments to act on and made every change myself; checked any factual claim against the source* |
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or paraphrase it, and were not used to generate, alter, or impute any participant data. I take full responsibility for the content of this report, including any errors introduced by AI tools.
@@ -119,11 +122,12 @@ One row per study for the key comparison: the original, your Phase 1 replication
 condition_labels <- c(none = "Control", human = "Human tutor", gpt = "ChatGPT")
 n_items <- c(pretest = 3, practice = 5, posttest = 3)
 
-# Key comparison: ChatGPT vs. Control. "ancova" = post-test regressed on condition with pre-test
-# as covariate (the difference in adjusted post-test means); "gain" = difference in mean gain
-# (post - pre), Welch t-test, which is the quantity the original study reported.
-# Set this to the key analysis you preregister.
-key_method <- "ancova"
+# Key comparison: ChatGPT vs. Control. "gain" = regression of learning gain (post - pre) on
+# condition, all three conditions, Control as reference: the ChatGPT coefficient is the
+# ChatGPT - Control difference in mean gain, the quantity the original study reported.
+# "ancova" = post-test on condition with pre-test as covariate. Set this to the key analysis
+# you preregister.
+key_method <- "gain"
 
 # Read every event for one phase, including any download-fallback files participants sent in.
 read_events <- function(dir) {
@@ -156,17 +160,17 @@ read_phase <- function(id) {
   trials <- read_events(dir)
   errors_path <- file.path(dir, "errors.csv")
   errors <- if (file.exists(errors_path)) read_csv(errors_path, show_col_types = FALSE) else tibble()
-
+  
   # Page loads turned away before consent (phones and tablets) have no events.
   n_unsupported <- sum(toupper(docs$device_supported) == "FALSE", na.rm = TRUE)
-
+  
   # Each test item is answered once (no feedback, locked after submitting); use the first
   # submission per item, which is also the first try on each practice item.
   answers <- trials |>
     filter(task == "answer") |>
     arrange(session_key, time) |>
     distinct(session_key, problemID, .keep_all = TRUE)
-
+  
   scores <- answers |>
     filter(study_phase %in% names(n_items)) |>
     group_by(session_key, study_phase) |>
@@ -175,7 +179,7 @@ read_phase <- function(id) {
   for (col in c(paste0("items_", names(n_items)), paste0("score_", names(n_items)))) {
     if (!col %in% names(scores)) scores[[col]] <- NA_real_
   }
-
+  
   phase_time <- function(task_name, ph) {
     trials |> filter(task == task_name, phase == ph) |>
       group_by(session_key) |> summarise(t = min(time), .groups = "drop")
@@ -186,7 +190,7 @@ read_phase <- function(id) {
   practice_time <- phase_time("phase_start", "practice") |> rename(t_start = t) |>
     inner_join(phase_time("phase_complete", "practice") |> rename(t_end = t), by = "session_key") |>
     transmute(session_key, practice_minutes = as.numeric(difftime(t_end, t_start, units = "mins")))
-
+  
   # Help used during practice: items where an authored hint was opened, and items where the
   # answer itself (the "bottom-out" hint) was revealed.
   help <- trials |>
@@ -198,7 +202,7 @@ read_phase <- function(id) {
   practice_attempts <- trials |>
     filter(task == "answer", study_phase == "practice") |>
     count(session_key, name = "practice_attempts")
-
+  
   people <- trials |>
     filter(!is.na(session_key)) |>
     group_by(session_key) |>
@@ -217,18 +221,18 @@ read_phase <- function(id) {
     mutate(across(c(items_pretest, items_practice, items_posttest, items_authored_help,
                     items_answer_revealed, practice_attempts), ~ replace_na(.x, 0)),
            pre = score_pretest, post = score_posttest, gain = post - pre)
-
+  
   # Previews are visits without a Prolific id (for example, someone opening the live link).
   n_preview <- sum(people$is_preview & people$consented)
   started  <- people |> filter(consented, !is_preview)
   complete <- started |> filter(items_pretest  >= n_items[["pretest"]],
                                 items_practice >= n_items[["practice"]],
                                 items_posttest >= n_items[["posttest"]])
-
-  # Exclusion rule: replace with the rule you preregistered. Here, as in the original study,
+  
+  # Exclusion rule: replace with the rule  preregistered. Here, as in the original study,
   # participants are analysed if they completed every pre-test, practice and post-test item.
   keep <- complete
-
+  
   list(participants = started, trials = trials, errors = errors, docs = docs,
        complete = complete, keep = keep, answers = answers,
        n_preview = n_preview, n_unsupported = n_unsupported,
@@ -237,24 +241,31 @@ read_phase <- function(id) {
 
 # The key statistic: ChatGPT minus Control, with a 95% CI. NULL until both conditions have at
 # least two analysed participants.
+#   "gain"   = regression of learning gain on condition (all three conditions, Control as the
+#              reference); the ChatGPT coefficient is the ChatGPT - Control difference in mean gain.
+#   "ancova" = post-test on condition with pre-test as covariate (ChatGPT and Control only).
 key_effect <- function(keep, method = key_method) {
-  d <- keep |> filter(condition %in% c("Control", "ChatGPT")) |> droplevels()
-  if (any(table(d$condition) < 2) || nlevels(d$condition) < 2) return(NULL)
-  d$condition <- relevel(d$condition, ref = "Control")
-  if (method == "ancova") {
-    fit <- lm(post ~ condition + pre, data = d)
-    ci  <- confint(fit)["conditionChatGPT", ]
-    co  <- summary(fit)$coefficients["conditionChatGPT", ]
-    tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
-           statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
-           method = "ANCOVA-adjusted difference in post-test")
-  } else {
-    tt <- t.test(gain ~ condition, data = d)
-    tibble(N = nrow(d), estimate = unname(diff(tt$estimate)),
-           ci_low = -tt$conf.int[2], ci_high = -tt$conf.int[1],
-           statistic = -unname(tt$statistic), df = unname(tt$parameter), p = tt$p.value,
-           method = "difference in mean gain")
+  n_by <- table(keep$condition)
+  if (any(n_by[c("Control", "ChatGPT")] < 2)) return(NULL)
+  if (method == "gain") {
+    d <- keep |> filter(!is.na(condition)) |> droplevels() |>
+      mutate(condition = relevel(condition, ref = "Control"))
+    fit <- lm(gain ~ condition, data = d)
+    if (fit$df.residual < 1) return(NULL)
+    ci <- confint(fit)["conditionChatGPT", ]
+    co <- summary(fit)$coefficients["conditionChatGPT", ]
+    return(tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
+                  statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
+                  method = "difference in mean gain (regression on condition)"))
   }
+  d <- keep |> filter(condition %in% c("Control", "ChatGPT")) |> droplevels() |>
+    mutate(condition = relevel(condition, ref = "Control"))
+  fit <- lm(post ~ condition + pre, data = d)
+  ci  <- confint(fit)["conditionChatGPT", ]
+  co  <- summary(fit)$coefficients["conditionChatGPT", ]
+  tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
+         statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
+         method = "ANCOVA-adjusted difference in post-test")
 }
 
 # The original study's effect: difference in mean gain, ChatGPT minus Control (Welch interval
@@ -337,8 +348,8 @@ bind_rows(
   fmt_row("Phase 2: extension", if (have_phase2) key_effect(phase2$keep))
 ) |>
   knitr::kable(align = "lrlllr",
-               caption = sprintf("Key comparison, ChatGPT minus Control, in percentage points. Original: difference in mean learning gain (Table 2; the interval needs the SDs of the gains). Replication: %s.",
-                                 if (key_method == "ancova") "difference in post-test score adjusted for pre-test score (ANCOVA)" else "difference in mean learning gain (Welch t-test)"))
+               caption = sprintf("Key comparison, ChatGPT minus Control, in percentage points. Original: difference in mean learning gain (Table 2; SDs from the authors' shared data), Welch t-test. Replication: %s.",
+                                 if (key_method == "ancova") "difference in post-test score adjusted for pre-test score (ANCOVA)" else "difference in mean learning gain, regression of gain on condition (all three conditions, Control as reference)"))
 ```
 
 # Phase 1: Replication
@@ -349,7 +360,7 @@ The Pardos and Bhandari speaks directly to my research interests examining how d
 
 I will replicate the statistics condition of Pardos and Bhandari using their published materials which comes from the *OpenStax Introductory Statistics* website. I would have the three types of help for the participants (1) The ChatGPT 3.5 worked-solution hints deployed in the original study, as published in the authors' open repository. (2) The hints and content written by human tutors (3) The control group which no help is offered. Participants will answer three background questions regarding their age and prior math experience, and then work through a problem set. The participants will conduct a three-item pre-test, then they will go through a practice problem round, then from there they will retake the same three items as a post-test.
 
-Some challenges that I foresee is the, online participants may on their own use AI tools to answer the test items, so having the integrity of the test takers will be very important. The original model used in the paper (GPT 3.5) is no longer available, I would have to use the original hints verbatim instead of regenerating them. This would keep the replication same but also does limit what we can say about the current models out. I also hope that participants will take their time to do the practice (and read through the hints when applicable). The primary analysis that I would expect to preregister will be an ANCOVA regressing post-test score on condition, with pre-test score as a covariate.
+Some challenges that I foresee is the, online participants may on their own use AI tools to answer the test items, so having the integrity of the test takers will be very important. The original model used in the paper (GPT 3.5) is no longer available, I would have to use the original hints verbatim instead of regenerating them. This would keep the replication same but also does limit what we can say about the current models out. I also hope that participants will take their time to do the practice (and read through the hints when applicable). The primary analysis will use linear regression (`score_difference ~ condition`) to examine whether learning gains, calculated as post-test minus pre-test scores, differ across experimental conditions.
 
 A possible extension I would like to look into is how current models are able to help learners, potentially compare models in terms of helpfulness of hints to the learner, and perhaps look at a subject outside of mathematics.
 
@@ -357,44 +368,67 @@ A possible extension I would like to look into is how current models are able to
 
 ### Power analysis
 
-::: {.callout-tip icon="false"}
-## Guidance
+The original sample included 23 participants in the ChatGPT condition, 21 in the human-tutor condition, and 22 in the control condition. Mean gains were 18.83, 11.10, and −7.56 percentage points, respectively. The original unadjusted ChatGPT–control difference in gains was 26.39 percentage points. The standard deviations and standardized effect size were calculated from the shared data.
 
-Report the original effect size, the sample needed for 80%, 90% and 95% power to detect it, and the sample you chose and why. The table below is computed from the original study's numbers entered at the top of this file.
+The corresponding gain standard deviations was 28.11 and 33.99 points which yields a standardized mean difference of approximately Cohen’s d = 0.85. A two-sided independent-groups t-test power calculation with α = .05 indicated that 23, 31, and 38 participants per group would be required for 80%, 90%, and 95% power, respectively assuming an effect of this magnitude.
 
-Original effects are usually overestimates, so powering to the original effect tends to produce an underpowered replication. One widely used alternative is to collect 2.5 times the original sample, which gives 80% power to detect an effect the original study had only 33% power to detect (Simonsohn, 2015; Experimentology §10.4). Say which approach you used, and what the course's participant budget allowed.
-:::
+With keeping the class budget in mind, the proposed target recruitment is asample of 23 per group, roughly 69 analysed in total. At that size we would have 80% power for the original effect and about 29% for an effect half its size. A larger target based on the 2.5× original-sample benchmark discussed by [Simonsohn (2015)](https://doi.org/10.1177/0956797614567341) and [Experimentology, Section 10.4](https://experimentology.io/010-sampling.html), would not be possible due to budget constraints as this would lead to 166 participants in total.
+
+At \$3.33 per participant, compensation for 69 participants is \$305.90, before additional recruitment and applicable Prolific fees.
 
 ```{r}
 #| label: power
-#| eval: false
 if (anyNA(original$sd_gain)) stop("Fill in sd_gain in the original-study chunk before running the power analysis.")
 
 ctrl <- original |> filter(condition == "Control")
 gpt  <- original |> filter(condition == "ChatGPT")
 
-original_effect <- gpt$gain - ctrl$gain
+# Named orig_diff (not original_effect) so it does not overwrite the original_effect() function
+# defined under Key statistics, which later chunks call.
+orig_diff <- gpt$gain - ctrl$gain
 sd_pooled <- sqrt(((ctrl$n - 1) * ctrl$sd_gain^2 + (gpt$n - 1) * gpt$sd_gain^2) /
                     (ctrl$n + gpt$n - 2))
-original_d <- original_effect / sd_pooled
+orig_d <- orig_diff / sd_pooled
 
 power_rows <- map_dfr(c(0.80, 0.90, 0.95), function(pw) {
-  n <- power.t.test(delta = original_effect, sd = sd_pooled,
+  n <- power.t.test(delta = orig_diff, sd = sd_pooled,
                     power = pw, sig.level = 0.05)$n
   tibble(power = scales::percent(pw), n_per_group = ceiling(n), n_total = 3 * ceiling(n))
 })
 
-two_and_half <- ceiling(2.5 * original$n)
-
 knitr::kable(power_rows, col.names = c("Power", "N per condition", "N total (3 conditions)"),
              caption = sprintf(
                "Sample needed to detect the original ChatGPT vs. Control difference in gain (%.1f points, d = %.2f), two-sided alpha = .05.",
-               original_effect, original_d))
+               orig_diff, orig_d))
 ```
 
+```{r}
+#| label: power-planned
+# Planned sample: the 80%-power sample for the original effect, per condition.
+n_planned <- 23
 
+tibble(
+  `Effect to detect` = c(sprintf("Original: %.1f points (d = %.2f)", orig_diff, orig_d),
+                         sprintf("Half the original: %.1f points (d = %.2f)", orig_diff / 2, orig_d / 2)),
+  `Power at planned N` = scales::percent(c(
+    power.t.test(n = n_planned, delta = orig_diff,     sd = sd_pooled, sig.level = 0.05)$power,
+    power.t.test(n = n_planned, delta = orig_diff / 2, sd = sd_pooled, sig.level = 0.05)$power),
+    accuracy = 1)
+) |>
+  knitr::kable(caption = sprintf(
+    "Planned sample: at least %d analysed participants per condition (80%% power for the original effect). Power for the ChatGPT vs. Control gain difference at %d per group, two-sided alpha = .05.",
+    n_planned, n_planned))
+```
 
 ### Planned sample
+
+Participants will be recruited through Prolific. Participants must use a desktop or laptop computer; phones and tablets will be screened out. The study will be advertised as taking 20 minutes, with compensation of \$3.33 equivalent to approximately \$10 per hour.
+
+Random assignment will use a deterministic hash of each participant’s Prolific identifier, mapped to the three conditions. Assignment will remain stable across reloads but will not guarantee equal group sizes.
+
+Recruitment will continue until at least 69 participants meet the inclusion criteria. Stopping decisions will depend on eligibility and completion, not accuracy, effect estimates, or statistical significance. Unequal group sizes will be accepted. No manual condition overrides or condition-specific top-ups will be used.
+
+The primary analysis will include consenting participants who complete every pretest, practice, and posttest item. Pilot A will be collected under a separate experiment identifier and will not be pooled with the main study.
 
 ::: {.callout-tip icon="false"}
 ## Guidance
@@ -404,6 +438,16 @@ Planned sample size and stopping rule, sampling frame (for example, "US resident
 
 ### Materials
 
+The experiment will use the authors’ OATutor platform and published Statistics materials on independent and mutually exclusive events from OpenStax Statistics Section 3.2. OATutor is integrated with the course experiment template for data storage and export. The experiment is available at the [study website](https://psych251.github.io/pardos2024/).
+
+The pretest and posttest contain the same three items. Questions use typed numerical responses or Yes/No choices. Within each part, problem order is randomized and multiple-choice options are shuffled.
+
+The five practice problems provide correctness feedback and allow repeated attempts. Participants must enter the correct answer before advancing. All conditions therefore include an answer-revealing panel that allows participants to continue if they cannot solve a problem independently. Tests provide neither hints nor correctness feedback.
+
+In the ChatGPT condition, help consists of the original study’s stored ChatGPT 3.5 worked solutions, including the final answer. No new hints will be generated. In the human-tutor condition, help consists of sequential instructional hints, culminating in a scaffold question requiring a response from the participant. Thus, these conditions differ in instructional format as well as source, as in the original study. Control participants receive only answer-revealing help.
+
+Three background questions ask about age group, prior statistics coursework, and prior college mathematics. These questions follow the published materials, although the original article describes only the age question. Each includes a “Prefer not to say” option.
+
 ::: {.callout-tip icon="false"}
 ## Guidance
 
@@ -412,42 +456,38 @@ All materials. You can quote the original article directly: put the text in quot
 
 ### Procedure
 
-::: {.callout-tip icon="false"}
-## Guidance
+Participants will enter through Prolific and then review the consent form. After consenting, they will receive brief background-question instructions and answer the three background questions.
 
-As for Materials: quote the original where you can and point out the exceptions. Describe the sequence a participant experiences, from consent to debrief, and how long it takes.
-:::
+Separate instruction screens will precede the pretest, practice, and posttest. Each screen will ask participants to complete the task independently without AI tools or internet searches.
+
+Participants will complete the three-item pretest, followed by five practice problems with their assigned form of help. During practice, they may open the available help panels but must submit the correct answer before continuing. They will then complete the three-item posttest, read the debriefing, and proceed through the completion and Prolific return flow.
+
+Pilot A sessions took about 5 minutes. This observed duration is less than 15 minutes from the 20-minute advertised allowance.
+
+The experiment will record responses, correctness, timestamps, help use, phase transitions, and departures from the study tab. Records created by reloads will be joined using the session identifier so that resumed sessions are not treated as separate participants.
 
 ### Analysis plan
 
-::: {.callout-tip icon="false"}
-## Guidance
+The key analysis of interest is whether participants receiving ChatGPT-generated hints show greater learning gains than participants in the no-hints control condition.
 
-The analysis strategy, as close to the original as possible: data cleaning rules, exclusion rules, covariates, and the model or test. Original papers often do not spell this out; say where you had to make a choice and what you chose.
+The analysis plan is to look at the pretest and posttest scores will be the percentage of the three test items answered correctly on first submission. Learning gain will equal posttest minus pretest score, expressed in percentage points.
 
-**State the key analysis of interest explicitly.** That is the single test your replication stands or falls on, and it must match your preregistration. You can pre-specify additional analyses here too.
-:::
+The primary analysis will use a linear regression model (`score_difference ~ condition`) to examine whether learning gains differ across the three experimental conditions. Condition will be treated as a categorical predictor, with the no-hints control group serving as the reference category. The key analysis of interest will be the difference in learning gains between participants receiving ChatGPT-generated hints and those in the control condition. What will be reported is the estimated difference, its 95% confidence interval, and the associated p-value.
 
-**Key analysis of interest.** The proportion of participants choosing the risky program is higher in the loss frame than in the gain frame, tested with a chi-square test of independence on the 2 × 2 table of frame by choice. The effect size is the difference in the proportion choosing the risky program (loss minus gain), with a 95% confidence interval.
+As a **secondary analysis**, we will consider if possible, a linear mixed-effects regression model (`score ~ test_stage * condition + (1 + test_stage | participant_id)`) to examine changes in performance from pretest to posttest across conditions. This model accounts for repeated measurements within participants by allowing each participant to have their own intercept and pretest-to-posttest slope. This helps to capture individual differences in baseline performance and change over time. The interaction between test stage and condition will test whether changes in scores differ across experimental conditions.
 
-**Exclusions.** Participants are excluded if they did not complete the study, if they answered no speeded trial at all (every lexical-decision trial timed out, the signature of a device without a keyboard), or if they answered fewer than 6 of the 8 lexical-decision trials correctly.
+Following the original study’s completion requirement, we will analyze participants who consented and completed every pretest, practice, and posttest item. Preview visits without a Prolific identifier will be excluded. Records from page reloads will be joined using the session identifier. Pilot sessions will be kept separate from the main sample through their experiment identifier.
+
+Participants are excluded if they did not complete the study, if they do not consent to the study, or if they are not able to complete the study within the time frame.
 
 ### Differences from the original study
 
-::: {.callout-tip icon="false"}
-## Guidance
-
-Every known difference in sample, setting, procedure, materials, and analysis, one per row. Minimizing differences is the goal, but some always remain. For each one, say whether it is expected to matter, based on claims in the original article or later research on when the effect does and does not appear. The rows below are the demo's real differences and show the level of detail expected; replace them with yours.
-:::
-
 | Aspect | Original study | This replication | Expected to matter? |
-|----|----|----|----|
-| Sample | University students in Stanford and British Columbia classrooms | Adults recruited on Prolific | Possibly. Framing effects have been found in both student and general samples, but their size varies across populations. |
-| Setting | Paper questionnaire in class | Online, unsupervised, on the participant's own computer | Unlikely for a single vignette, though attention may be lower online. |
-| Wording | "an unusual Asian disease" | "an unusual disease" | Unlikely. The ethnonym is incidental to the manipulation and dated. |
-| Design | Between subjects: each participant saw one frame | Between subjects, randomly assigned | No. |
-| Response | Circle a program on paper | Click a button | Unlikely. |
-| Other tasks | Problems presented alongside other questionnaire items | Followed by a short lexical-decision task used as an attention check | Unlikely: the check comes after the choice. |
+|------------------|------------------|------------------|------------------|
+| Sample | MTurk in the original study period. | Prolific participants in 2026. | Most likely will not matter as participants both recruited online. |
+| Subject coverage | 4 mathematics subjects | Statistics only | Limits generalization and prevents examining differences across subjects. |
+| Design | Qualtrics evenly presented conditions | Hash-based assignment without manual top-ups | May produce unequal group sizes. |
+| Response | click button | Click a button | no |
 
 ### Methods addendum (post data collection)
 
@@ -576,11 +616,10 @@ keep |>
 #| label: confirmatory
 #| eval: !expr have_data
 if (enough_for_tests) {
-  # ANCOVA: post-test on condition, controlling for pre-test; Control is the reference group.
-  fit <- lm(post ~ condition + pre, data = keep |> mutate(condition = relevel(condition, "Control")))
+  # Primary model: learning gain on condition, Control as the reference group.
+  fit <- lm(gain ~ condition, data = keep |> mutate(condition = relevel(condition, "Control")))
   print(summary(fit))
-  # Omnibus test of condition, controlling for pre-test.
-  print(anova(lm(post ~ pre, data = keep), fit))
+  print(confint(fit))
   # Key comparison (ChatGPT − Control), as reported in Key statistics.
   print(key_effect(keep))
 } else {
@@ -659,7 +698,7 @@ Whichever you choose, use the same measure, scale, condition order and error-bar
 ```{r}
 #| label: fig-comparison
 #| eval: !expr have_data
-#| fig-cap: "Mean learning gain (post-test minus pre-test, percentage points) in each condition: original study (Pardos & Bhandari, 2024, Table 2, Statistics) and Phase 1 replication. Error bars are 95% confidence intervals; the original's appear once the SDs of its gains are entered at the top of this file."
+#| fig-cap: "Mean learning gain (post-test minus pre-test, percentage points) in each condition: original study (Pardos & Bhandari, 2024, Table 2, Statistics) and Phase 1 replication. Error bars are 95% confidence intervals (the original's computed from the SDs of gains in the authors' shared data)."
 #| fig-width: 7
 #| fig-height: 4
 comparison_plot(Original = original_gain_summary(), `Phase 1: replication` = gain_summary(keep))
@@ -794,7 +833,7 @@ Every change from the Phase 1 experiment, one per row, each tagged with a catego
 :::
 
 | \# | Category | Phase 1 | Phase 2 | Why |
-|----|----|----|----|----|
+|---------------|---------------|---------------|---------------|---------------|
 | 1 | Sample | 27 analysed participants | 300 analysed participants (150 per frame) | Phase 1's interval was too wide to distinguish the original effect from a much smaller one. |
 | 2 | Checks | No comprehension check | After the choice, participants say how many people are at risk (600) | Confirms participants read the scenario; failures are reported, and excluded only if preregistered. |
 | 3 | Exploratory measure | None | At the end: "How confident are you in your choice?" (1–7) | Exploratory only; collected after every confirmatory measure. |
@@ -903,4 +942,4 @@ Compare Phase 2 with Phase 1 and with the original, using the Key statistics tab
 Edit the statement below to match what you are actually sharing. Anonymized data and all code should be public; if something cannot be shared, say what and why.
 :::
 
-The experiment code, the anonymized data, and the code that produces every number in this report are available at <https://github.com/psych251/your-repo>. The experiment itself can be taken at <https://psych251.github.io/your-repo/>. The data contain no names, email addresses, IP addresses, or Prolific IDs; the file linking participants to their Prolific IDs is kept privately for payment and is not shared.
+The experiment code, the anonymized data, and the code that produces every number in this report are available at <https://github.com/psych251/pardos2024>. The experiment itself can be taken at <https://psych251.github.io/pardos2024/>. The data contain no names, email addresses, IP addresses, or Prolific IDs; the file linking participants to their Prolific IDs is kept privately for payment and is not shared.
