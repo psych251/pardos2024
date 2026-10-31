@@ -52,7 +52,7 @@ library(jsonlite)
 # Must match EXPERIMENT.id in tutor/src/study/studyConfig.js, and the --experiment you pass to
 # the export. Pilot A runs under "pardos2024-pilot-a"; change both to the final id (for example
 # "pardos2024-stats") before final data collection. Phase 2 runs under its own id.
-experiment_id        <- "pardos2024-pilot-b"
+experiment_id        <- "pardos2024-stats"
 experiment_id_phase2 <- "pardos2024-stats-phase2"
 ```
 
@@ -86,16 +86,6 @@ original <- tibble(
 
 # AI use statement
 
-::: {.callout-tip icon="false"}
-## Guidance
-
-This statement comes first so a reader knows how the work was produced before reading it. Keep it current from the start of the project rather than reconstructing it at the end.
-
-**Course policy: you write all of the text in this report yourself.** AI tools may help with code, and may comment on drafts you have written, but they may not write, rewrite or paraphrase any of the report's text. That includes "polishing" a paragraph.
-
-List every AI tool you used on this project, what you used it for, and how you checked what it produced. Include coding assistants (for example Claude Code, Codex, Copilot) and chat assistants. Name the model and version where you know it. "How you checked" is the important column: say what you verified yourself, not that the output "looked right". If you used no AI tools, replace the table with a sentence saying so.
-:::
-
 | Tool and model | What it was used for | How you checked the output |
 |------------------------|------------------------|------------------------|
 | ChatGPT | understanding the repository/template | looked through the repository myself and when I had a question about certain files asked ChatGPT and compared to what I had learn before in class/readings. |
@@ -106,12 +96,6 @@ List every AI tool you used on this project, what you used it for, and how you c
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or paraphrase it, and were not used to generate, alter, or impute any participant data. I take full responsibility for the content of this report, including any errors introduced by AI tools.
 
 # Key statistics
-
-::: {.callout-tip icon="false"}
-## Guidance
-
-One row per study for the key comparison: the original, your Phase 1 replication, and your Phase 2 extension. The table fills itself in from the data as each phase is exported, using the analysis code below (open "Show the analysis code"), which is shared by both phases so they are analysed identically. Edit that code once, here, to match your design and preregistered exclusion rule. On the scientific-extension track, the Phase 2 row reports the new comparison: adapt its code and say so in the caption.
-:::
 
 ```{r}
 #| label: analysis-functions
@@ -376,6 +360,16 @@ With keeping the class budget in mind, the proposed target recruitment is asampl
 
 At \$3.33 per participant, compensation for 69 participants is \$305.90, before additional recruitment and applicable Prolific fees.
 
+### Pilot B
+
+In Pilot B, six participants consented to the study (1 Control, 1 Human Tutor, and 4 ChatGPT). Five participants completed all experimental items, while one participant in the ChatGPT condition dropped out partway through the study.
+
+One participant reloaded the study midway through, but their records were successfully merged.
+
+The median time from pretest to posttest was 8.7 minutes for the Control and Human Tutor conditions and 11.5 minutes for the ChatGPT condition, including approximately five minutes of practice.
+
+The pilot also highlighted the importance of restricting Prolific recruitment to desktop users to prevent participants on unsupported devices from entering the study as two additional participants attempted to access the study using a phone/tablet and were prevented from proceeding before consent.
+
 ```{r}
 #| label: power
 if (anyNA(original$sd_gain)) stop("Fill in sd_gain in the original-study chunk before running the power analysis.")
@@ -430,12 +424,6 @@ Recruitment will continue until at least 69 participants meet the inclusion crit
 
 The primary analysis will include consenting participants who complete every pretest, practice, and posttest item. Pilot A will be collected under a separate experiment identifier and will not be pooled with the main study.
 
-::: {.callout-tip icon="false"}
-## Guidance
-
-Planned sample size and stopping rule, sampling frame (for example, "US residents on Prolific, fluent in English, 18 or older"), known demographics, and any preselection or screening. The stopping rule should be data-independent: "collect until N participants pass the exclusion criteria below" rather than "until the result is clear".
-:::
-
 ### Materials
 
 The experiment will use the authors’ OATutor platform and published Statistics materials on independent and mutually exclusive events from OpenStax Statistics Section 3.2. OATutor is integrated with the course experiment template for data storage and export. The experiment is available at the [study website](https://psych251.github.io/pardos2024/).
@@ -447,12 +435,6 @@ The five practice problems provide correctness feedback and allow repeated attem
 In the ChatGPT condition, help consists of the original study’s stored ChatGPT 3.5 worked solutions, including the final answer. No new hints will be generated. In the human-tutor condition, help consists of sequential instructional hints, culminating in a scaffold question requiring a response from the participant. Thus, these conditions differ in instructional format as well as source, as in the original study. Control participants receive only answer-revealing help.
 
 Three background questions ask about age group, prior statistics coursework, and prior college mathematics. These questions follow the published materials, although the original article describes only the age question. Each includes a “Prefer not to say” option.
-
-::: {.callout-tip icon="false"}
-## Guidance
-
-All materials. You can quote the original article directly: put the text in quotation marks and note that it was followed precisely, or quote it and point out the exceptions. Link to the live experiment above rather than pasting screenshots of every screen.
-:::
 
 ### Procedure
 
