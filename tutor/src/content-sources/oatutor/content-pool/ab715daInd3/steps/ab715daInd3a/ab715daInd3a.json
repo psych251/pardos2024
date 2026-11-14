@@ -1,15 +1,12 @@
 {
     "id": "ab715daInd3a",
     "stepAnswer": [
-        "Yes"
+        "$$0.63$$"
     ],
-    "problemType": "MultipleChoice",
-    "stepTitle": "Let event A $$=$$ learning Spanish. Let event B $$=$$ learning German. Then A AND B $$=$$ learning Spanish and German. Suppose P(A) $$=$$ $$0.4$$ and P(B) $$=$$ $$0.2$$. P(A AND B) $$=$$ $$0.08$$. Are events A and B independent?",
+    "problemType": "TextBox",
+    "stepTitle": "Let U and V be mutually exclusive events. Suppose P(U) $$=$$ $$0.26$$ and P(V) $$=$$ $$0.37$$. What is P(U OR V)?",
     "stepBody": "",
-    "answerType": "string",
+    "answerType": "arithmetic",
     "variabilization": {},
-    "choices": [
-        "Yes",
-        "No"
-    ]
+    "answerLatex": "$$0.63$$"
 }

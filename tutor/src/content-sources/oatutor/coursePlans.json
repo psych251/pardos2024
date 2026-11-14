@@ -213,6 +213,20 @@
                 "doMasteryUpdate": false,
                 "showStuMastery": false,
                 "unlockFirstHint": false
+            },
+            {
+                "id": "Ent7rYb0-xPr4-c71c-e2026Phase2",
+                "name": "Lesson Entry",
+                "topics": "Answer box practice",
+                "allowRecycle": false,
+                "learningObjectives": {
+                    "answer_entry_practice": 0.85
+                },
+                "giveStuFeedback": true,
+                "giveStuHints": false,
+                "doMasteryUpdate": false,
+                "showStuMastery": false,
+                "unlockFirstHint": false
             }
         ]
     },

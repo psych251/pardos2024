@@ -86,12 +86,17 @@ original <- tibble(
 
 # AI use statement
 
-| Tool and model | What it was used for | How you checked the output |
-|------------------------|------------------------|------------------------|
-| ChatGPT | understanding the repository/template | looked through the repository myself and when I had a question about certain files asked ChatGPT and compared to what I had learn before in class/readings. |
-| Claude (claude-opus-5.5) | Built the experiment in `tutor/`: forked the authors' OATutor study platform, restricted it to the Statistics lesson, standardized pre/post item 3 across conditions, fixed a typo in practice item 3, added the course consent, debrief, device check, Prolific handling, and saving through the template's DataSaver. Wrote the analysis code chunks in this report (no text). | I looked through the code and checked with the original data to ensure that the Claude did not make any mistakes. I also ran the experiment a few times myself to ensure that all parts ran smoothly and to catch bugs, which I then communicated to Claude and made sure they were fixed and reran the experiment to ensure. |
-| Claude Chat (Claude Opus 5.5) | Drafted the analysis code | Checked the analysis code and got feedback from class TA, and made adjustments for how another analysis I could do would be better for this project. |
-| *e.g., ChatGPT* | *Comments on my draft of the Introduction (no text generated)* | *Decided which comments to act on and made every change myself; checked any factual claim against the source* |
++-------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Tool and model                | What it was used for                                                                                                                                                                                                                                                                                                                                                             | How you checked the output                                                                                                                                                                                                                                                                                                    |
++===============================+==================================================================================================================================================================================================================================================================================================================================================================================+===============================================================================================================================================================================================================================================================================================================================+
+| ChatGPT                       | understanding the repository/template                                                                                                                                                                                                                                                                                                                                            | looked through the repository myself and when I had a question about certain files asked ChatGPT and compared to what I had learn before in class/readings.                                                                                                                                                                   |
++-------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Claude (claude-opus-5.5)      | Built the experiment in `tutor/`: forked the authors' OATutor study platform, restricted it to the Statistics lesson, standardized pre/post item 3 across conditions, fixed a typo in practice item 3, added the course consent, debrief, device check, Prolific handling, and saving through the template's DataSaver. Wrote the analysis code chunks in this report (no text). | I looked through the code and checked with the original data to ensure that the Claude did not make any mistakes. I also ran the experiment a few times myself to ensure that all parts ran smoothly and to catch bugs, which I then communicated to Claude and made sure they were fixed and reran the experiment to ensure. |
++-------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Claude Chat (Claude Opus 5.5) | Drafted the analysis code                                                                                                                                                                                                                                                                                                                                                        | Checked the analysis code and got feedback from class TA, and made adjustments for how another analysis I could do would be better for this project.                                                                                                                                                                          |
++-------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| *e.g., ChatGPT*               | *Comments on my draft of the Introduction (no text generated)*                                                                                                                                                                                                                                                                                                                   | *Decided which comments to act on and made every change myself; checked any factual claim against the source*                                                                                                                                                                                                                 |
++-------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 I wrote all of the text in this report myself. AI tools were not used to write, rewrite or paraphrase it, and were not used to generate, alter, or impute any participant data. I take full responsibility for the content of this report, including any errors introduced by AI tools.
 
@@ -104,7 +109,12 @@ I wrote all of the text in this report myself. AI tools were not used to write, 
 # Condition codes in the data (tutor/src/study/studyConfig.js) and their labels here, in the
 # same order as the `original` table above.
 condition_labels <- c(none = "Control", human = "Human tutor", gpt = "ChatGPT")
+# Phase 2 replaces the ChatGPT 3.5 worked solutions with Gemini's in the same arm (code "gpt"),
+# so Phase 2 labels that arm "Gemini".
+condition_labels_phase2 <- c(none = "Control", human = "Human tutor", gpt = "Gemini")
 n_items <- c(pretest = 3, practice = 5, posttest = 3)
+# Phase 2 uses six harder test items (OpenStax 3.2, typed answers); practice is unchanged.
+n_items_phase2 <- c(pretest = 6, practice = 5, posttest = 6)
 
 # Key comparison: ChatGPT vs. Control. "gain" = regression of learning gain (post - pre) on
 # condition, all three conditions, Control as reference: the ChatGPT coefficient is the
@@ -137,7 +147,7 @@ read_events <- function(dir) {
 # The template saves one participant document per page load, so a participant who reloaded has
 # two documents. Every event carries a `session_key` (random, made in the participant's browser,
 # not an identifier), and participants are rebuilt from it.
-read_phase <- function(id) {
+read_phase <- function(id, labels = condition_labels, items = n_items) {
   dir <- file.path("..", "data", "raw", id)
   if (!all(file.exists(file.path(dir, c("participants.csv", "trials.csv"))))) return(NULL)
   docs   <- read_csv(file.path(dir, "participants.csv"), col_types = cols(.default = col_character()))
@@ -156,11 +166,11 @@ read_phase <- function(id) {
     distinct(session_key, problemID, .keep_all = TRUE)
   
   scores <- answers |>
-    filter(study_phase %in% names(n_items)) |>
+    filter(study_phase %in% names(items)) |>
     group_by(session_key, study_phase) |>
     summarise(items = n_distinct(problemID), score = 100 * mean(isCorrect), .groups = "drop") |>
     pivot_wider(names_from = study_phase, values_from = c(items, score))
-  for (col in c(paste0("items_", names(n_items)), paste0("score_", names(n_items)))) {
+  for (col in c(paste0("items_", names(items)), paste0("score_", names(items)))) {
     if (!col %in% names(scores)) scores[[col]] <- NA_real_
   }
   
@@ -196,7 +206,7 @@ read_phase <- function(id) {
               declined = any(task == "consent" & toupper(consented) == "FALSE"),
               n_page_loads = n_distinct(participant_id),
               .groups = "drop") |>
-    mutate(condition = factor(condition_labels[condition_code], levels = condition_labels)) |>
+    mutate(condition = factor(labels[condition_code], levels = labels)) |>
     left_join(scores, by = "session_key") |>
     left_join(timing, by = "session_key") |>
     left_join(practice_time, by = "session_key") |>
@@ -209,9 +219,9 @@ read_phase <- function(id) {
   # Previews are visits without a Prolific id (for example, someone opening the live link).
   n_preview <- sum(people$is_preview & people$consented)
   started  <- people |> filter(consented, !is_preview)
-  complete <- started |> filter(items_pretest  >= n_items[["pretest"]],
-                                items_practice >= n_items[["practice"]],
-                                items_posttest >= n_items[["posttest"]])
+  complete <- started |> filter(items_pretest  >= items[["pretest"]],
+                                items_practice >= items[["practice"]],
+                                items_posttest >= items[["posttest"]])
   
   # Exclusion rule: replace with the rule  preregistered. Here, as in the original study,
   # participants are analysed if they completed every pre-test, practice and post-test item.
@@ -228,25 +238,25 @@ read_phase <- function(id) {
 #   "gain"   = regression of learning gain on condition (all three conditions, Control as the
 #              reference); the ChatGPT coefficient is the ChatGPT - Control difference in mean gain.
 #   "ancova" = post-test on condition with pre-test as covariate (ChatGPT and Control only).
-key_effect <- function(keep, method = key_method) {
+key_effect <- function(keep, method = key_method, ai = "ChatGPT") {
   n_by <- table(keep$condition)
-  if (any(n_by[c("Control", "ChatGPT")] < 2)) return(NULL)
+  if (any(n_by[c("Control", ai)] < 2)) return(NULL)
   if (method == "gain") {
     d <- keep |> filter(!is.na(condition)) |> droplevels() |>
       mutate(condition = relevel(condition, ref = "Control"))
     fit <- lm(gain ~ condition, data = d)
     if (fit$df.residual < 1) return(NULL)
-    ci <- confint(fit)["conditionChatGPT", ]
-    co <- summary(fit)$coefficients["conditionChatGPT", ]
+    ci <- confint(fit)[paste0("condition", ai), ]
+    co <- summary(fit)$coefficients[paste0("condition", ai), ]
     return(tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
                   statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
                   method = "difference in mean gain (regression on condition)"))
   }
-  d <- keep |> filter(condition %in% c("Control", "ChatGPT")) |> droplevels() |>
+  d <- keep |> filter(condition %in% c("Control", ai)) |> droplevels() |>
     mutate(condition = relevel(condition, ref = "Control"))
   fit <- lm(post ~ condition + pre, data = d)
-  ci  <- confint(fit)["conditionChatGPT", ]
-  co  <- summary(fit)$coefficients["conditionChatGPT", ]
+  ci  <- confint(fit)[paste0("condition", ai), ]
+  co  <- summary(fit)$coefficients[paste0("condition", ai), ]
   tibble(N = nrow(d), estimate = co[["Estimate"]], ci_low = ci[[1]], ci_high = ci[[2]],
          statistic = co[["t value"]], df = fit$df.residual, p = co[["Pr(>|t|)"]],
          method = "ANCOVA-adjusted difference in post-test")
@@ -290,7 +300,9 @@ comparison_plot <- function(...) {
   studies <- list(...)
   studies <- studies[!map_lgl(studies, ~ is.null(.x) || nrow(.x) == 0)]
   df <- imap_dfr(studies, ~ mutate(.x, Study = .y)) |>
-    mutate(Study = factor(Study, levels = names(studies)), label = sprintf("n = %d", n))
+    mutate(Study = factor(Study, levels = names(studies)), label = sprintf("n = %d", n),
+           condition = factor(as.character(condition),
+                              levels = unique(c(condition_labels, condition_labels_phase2))))
   fills <- setNames(c("grey55", "#1E6E76", "#B8792A")[seq_along(studies)], names(studies))
   dodge <- position_dodge(width = 0.6)
   ggplot(df, aes(x = condition, y = gain_mean, colour = Study, group = Study)) +
@@ -307,7 +319,7 @@ comparison_plot <- function(...) {
 }
 
 phase1 <- read_phase(experiment_id)
-phase2 <- read_phase(experiment_id_phase2)
+phase2 <- read_phase(experiment_id_phase2, labels = condition_labels_phase2, items = n_items_phase2)
 have_data   <- !is.null(phase1)
 have_phase2 <- !is.null(phase2)
 ```
@@ -317,11 +329,11 @@ have_phase2 <- !is.null(phase2)
 #| echo: false
 fmt_row <- function(study, r) {
   if (is.null(r)) {
-    return(tibble(Study = study, N = "", `Effect (ChatGPT − Control)` = "not yet collected",
+    return(tibble(Study = study, N = "", `Effect (AI hints − Control)` = "not yet collected",
                   `95% CI` = "", Test = "", p = ""))
   }
   tibble(Study = study, N = as.character(r$N),
-         `Effect (ChatGPT − Control)` = sprintf("%.1f points", r$estimate),
+         `Effect (AI hints − Control)` = sprintf("%.1f points", r$estimate),
          `95% CI` = if (is.na(r$ci_low)) "" else sprintf("[%.1f, %.1f]", r$ci_low, r$ci_high),
          Test = if (is.na(r$statistic)) "" else sprintf("t(%.0f) = %.2f", r$df, r$statistic),
          p = if (is.na(r$p)) "" else format.pval(r$p, digits = 2, eps = 0.001))
@@ -329,10 +341,10 @@ fmt_row <- function(study, r) {
 bind_rows(
   fmt_row("Original", original_effect()),
   fmt_row("Phase 1: replication", if (have_data) key_effect(phase1$keep)),
-  fmt_row("Phase 2: extension", if (have_phase2) key_effect(phase2$keep))
+  fmt_row("Phase 2: extension", if (have_phase2) key_effect(phase2$keep, ai = "Gemini"))
 ) |>
   knitr::kable(align = "lrlllr",
-               caption = sprintf("Key comparison, ChatGPT minus Control, in percentage points. Original: difference in mean learning gain (Table 2; SDs from the authors' shared data), Welch t-test. Replication: %s.",
+               caption = sprintf("Key comparison, AI-hint condition minus Control, in percentage points (AI hints: ChatGPT 3.5 in the original and Phase 1, Gemini in Phase 2). Original: difference in mean learning gain (Table 2; SDs from the authors' shared data), Welch t-test. Replication: %s.",
                                  if (key_method == "ancova") "difference in post-test score adjusted for pre-test score (ANCOVA)" else "difference in mean learning gain, regression of gain on condition (all three conditions, Control as reference)"))
 ```
 
@@ -464,20 +476,27 @@ Participants are excluded if they did not complete the study, if they do not con
 
 ### Differences from the original study
 
-| Aspect | Original study | This replication | Expected to matter? |
-|------------------|------------------|------------------|------------------|
-| Sample | MTurk in the original study period. | Prolific participants in 2026. | Most likely will not matter as participants both recruited online. |
-| Subject coverage | 4 mathematics subjects | Statistics only | Limits generalization and prevents examining differences across subjects. |
-| Design | Qualtrics evenly presented conditions | Hash-based assignment without manual top-ups | May produce unequal group sizes. |
-| Response | click button | Click a button | no |
++------------------+---------------------------------------+----------------------------------------------+---------------------------------------------------------------------------+
+| Aspect           | Original study                        | This replication                             | Expected to matter?                                                       |
++==================+=======================================+==============================================+===========================================================================+
+| Sample           | MTurk in the original study period.   | Prolific participants in 2026.               | Most likely will not matter as participants both recruited online.        |
++------------------+---------------------------------------+----------------------------------------------+---------------------------------------------------------------------------+
+| Subject coverage | 4 mathematics subjects                | Statistics only                              | Limits generalization and prevents examining differences across subjects. |
++------------------+---------------------------------------+----------------------------------------------+---------------------------------------------------------------------------+
+| Design           | Qualtrics evenly presented conditions | Hash-based assignment without manual top-ups | May produce unequal group sizes.                                          |
++------------------+---------------------------------------+----------------------------------------------+---------------------------------------------------------------------------+
+| Response         | click button                          | Click a button                               | no                                                                        |
++------------------+---------------------------------------+----------------------------------------------+---------------------------------------------------------------------------+
 
 ### Methods addendum (post data collection)
 
-::: {.callout-tip icon="false"}
-## Guidance
+A total of 73 participants consented to the study. Of these, 69 completed all pre-test, practice, and post-test items and met the inclusion criteria. The final analytic sample consisted of 27 participants in the Control condition, 19 in the Human Tutor condition, and 23 in the ChatGPT condition.
 
-Leave this section out of the version you preregister. After data collection, report the actual sample and any deviation from the plan above.
-:::
+Four participants (5.5%) discontinued the study after consenting, and five mobile or tablet users were turned away before consent. Data from the two pilot studies were retained separately and were not included in the main analyses.
+
+The preregistered stopping rule specified at least 69 participants meeting the inclusion criteria, which was achieved. However, the final allocation was unequal across conditions, and the Human Tutor condition included 19 rather than the anticipated 23 participants. This resulted from random assignment.
+
+The primary confirmatory analysis was conducted as planned, using learning gain as the outcome and experimental condition as the predictor.
 
 #### Actual sample
 
@@ -565,21 +584,13 @@ background |>
 
 #### Deviations from the preregistered plan
 
-::: {.callout-tip icon="false"}
-## Guidance
+The primary analysis involved regressing learning gain on experimental condition, using the Control condition as the reference group, as originally specified. But, the preregistration also proposed considering a secondary mixed-effects model examining the interaction between test stage and condition with participant-level random effects. This model was not fitted because it could not be estimated as originally intended.
 
-Any deviation from the preregistered plan above, or "None". Changes made after seeing data belong here even if they seem minor, together with the reason.
-:::
+Additionally, the methods specified that participants' departures from the study tab would be recorded. But this tracking feature was not working well as I hoped. So I was unable to determine whether participants switched tabs during the experiment.
 
 ## Results
 
 ### Data preparation
-
-::: {.callout-tip icon="false"}
-## Guidance
-
-Data preparation follows the analysis plan. Loading and exclusions are done by the shared analysis code under Key statistics (open "Show the analysis code"). Describe anything you did to the data beyond that.
-:::
 
 ### Confirmatory analysis
 
@@ -611,12 +622,6 @@ if (enough_for_tests) {
 ```
 
 ### Replication assessment
-
-::: {.callout-tip icon="false"}
-## Guidance
-
-Judge the replication on effect sizes, not only on whether the key test is significant. Compare the replication estimate and its interval with the original: does the interval exclude zero, and does it include the original estimate? A significant result much smaller than the original, or a non-significant result whose interval still includes the original effect, are both informative and should be reported as such (Experimentology §3.2).
-:::
 
 ```{r}
 #| label: comparison
@@ -767,44 +772,29 @@ if (nrow(errors) > 0) {
 
 ### Summary of replication attempt
 
-::: {.callout-tip icon="false"}
-## Guidance
-
-Open with one paragraph summarizing the result of the key analysis and your assessment of whether the original finding replicated, partially replicated, or failed to replicate. Base that judgment on the replication assessment above: the size of the effect relative to the original, not just the p value.
-:::
+The replication examined whether ChatGPT-generated hints improve students' learning gains in statistics compared to a control condition, as reported in the original study. The original study found that participants in the ChatGPT condition demonstrated a 26.4 percentage-point learning-gain advantage over those in the Control condition. However, my replication did not reproduce this finding. Instead, participants in the ChatGPT condition showed a 4.1 percentage-point lower learning gain compared to the Control condition (95% CI \[−19.5, 11.3\], p = .60). This difference was not statistically significant, indicating that did not detect a statistically significant learning advantage from ChatGPT-generated hints. Also the confidence interval also excluded the original study's estimated advantage of 26.4 percentage points.
 
 ### Commentary
 
-::: {.callout-tip icon="false"}
-## Guidance
+One possible explanation for these results is that participants in the replication had more prior knowledge than those in the original study. The participants scored 64–74% on the pretest, compared to 39–51% in the original study, and about 64% had previously taken a statistics course. I think this may have limited how much participants could improve.
 
-Open-ended commentary, none of it long: (a) what the exploratory analyses suggest; (b) what the replication means, for example whether the differences between your study and the original are definitely, plausibly, or unlikely to be moderators of the result; and (c) any objections or challenges raised by you or the original authors.
-:::
+I also found that participants opened hints on only 2.5 out of five problems in the ChatGPT condition and 1.8 in the Human-tutor condition. This suggests that limited engagement with the hints may have reduced their effectiveness.
+
+Overall, I think the replication raises questions about the large learning advantage reported in the original study. Differences in participant recruitment, prior knowledge, and assessment materials are plausible explanations, but I cannot determine whether they caused the different results. This replication study was also limited by its short learning period, three-question assessment, and use of older GPT-3.5 explanations. I would not conclude that ChatGPT tutoring is ineffective, only that I was unable to replicate the original findings under our study conditions.
 
 # Phase 2: Extension
 
-::: {.callout-tip icon="false"}
-## Guidance: choosing your extension
+This extension looks to determine whether AI-generated hints can improve statistics learning when potential ceiling effects are reduced and learners are encouraged to engage more consistently with instructional support. The study will also explore whether hints generated by a newer Gemini model produce different learning outcomes from the original ChatGPT 3.5 hints.
 
-Follow the Extension guidelines page on Canvas. In brief:
-
-- **By default the extension is a best-practices modification of your Phase 1 experiment.** If your replication did not succeed, it is a **rescue**: address the plausible reasons for the failure. If it did succeed, it is an **upgrade**: make the estimate more precise. Typical changes are better or more reliable measurement, more trials, a within-participant design where that is legitimate, comprehension and manipulation checks, clearer instructions, or a larger or better-targeted sample.
-- **If your scientific extension pitch was approved at Milestone 3 and your replication succeeded, propose that instead:** the original conditions rerun unchanged, plus the one added condition or manipulation, with a power analysis for the new comparison.
-- On either track you may add exploratory measures **at the end** of the study.
-- Every change is listed and tagged by category below; everything else stays identical.
-
-State your track on the line below, and delete the others.
-:::
-
-**Track:** Best-practices upgrade / Best-practices rescue / Scientific extension (approved at Milestone 3)
+**Track:** Scientific extension (metascience optin study)
 
 ## Rationale
 
-::: {.callout-tip icon="false"}
-## Guidance
+The Phase 1 replication did not reproduce the original finding that ChatGPT-generated hints substantially improved learning relative to Control. Participants did start the experiment with relatively high pre-test scores, and nearly two-thirds reported previous statistics coursework. Because the assessment included only three items, participants with substantial prior knowledge had limited opportunities to demonstrate improvement.
 
-One or two paragraphs. For a rescue: what are the plausible reasons Phase 1 did not reproduce the original result, and how does each change address one of them? For an upgrade: where is the Phase 1 estimate least precise or least trustworthy, and how will the changes improve it? For a scientific extension: what question does the added condition answer, and why does it follow from the original finding?
-:::
+In addition participants did not consistently use the available instructional support. On average, participants assigned to ChatGPT hint condition opened half of the practice problems. The extension will address this by introducing more challenging assessment items, recruiting learners with less prior statistics experience, and modifying the interface to increase exposure to hints.
+
+The original study used an older LLM model, ChatGPT 3.5. Introducing a new Gemini 2026 model, will help to see hints with explanations generated by a newer model compared to older model (GPT 3.5) and how perhaps on demand and tailored help may help participants to learn the material better.
 
 ## Changes from Phase 1
 
@@ -814,26 +804,32 @@ One or two paragraphs. For a rescue: what are the plausible reasons Phase 1 did 
 Every change from the Phase 1 experiment, one per row, each tagged with a category: Measurement, Trials, Design, Checks, Instructions, Sample, Added condition (scientific track only), or Exploratory measure (end of study only). If it is not in this table, it does not change: same materials, wording, procedure, exclusion rule and analysis. The rows below are examples for the demo; replace them with yours.
 :::
 
-| \# | Category | Phase 1 | Phase 2 | Why |
-|---------------|---------------|---------------|---------------|---------------|
-| 1 | Sample | 27 analysed participants | 300 analysed participants (150 per frame) | Phase 1's interval was too wide to distinguish the original effect from a much smaller one. |
-| 2 | Checks | No comprehension check | After the choice, participants say how many people are at risk (600) | Confirms participants read the scenario; failures are reported, and excluded only if preregistered. |
-| 3 | Exploratory measure | None | At the end: "How confident are you in your choice?" (1–7) | Exploratory only; collected after every confirmatory measure. |
++-----------+-----------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+| \#        | Category                                | Phase 1                                                                                                         | Phase 2                                                                                                                                                     | Why                                                                                          |
++===========+=========================================+=================================================================================================================+=============================================================================================================================================================+==============================================================================================+
+| 1         | Sample                                  | 69 participants across three conditions (27 Control, 19 Human Tutor, 23 ChatGPT).                               | Recruit at least 70 participants, randomized across the three conditions (control, human, and Gemini).                                                      | Keep the study feasible within available time and resources.                                 |
++-----------+-----------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+| 2         | Check                                   | Participants could participate regardless of previous statistics coursework; 64% had taken a statistics course. | 1)Recruit participants who have not previously completed a statistics course. 2)Require participants to open at least one hint before revealing the answer. | Reduce prior knowledge and potential ceiling effects.                                        |
+|           |                                         |                                                                                                                 |                                                                                                                                                             |                                                                                              |
+|           |                                         |                                                                                                                 |                                                                                                                                                             | As well as to increase exposure to instructional explanations.                               |
++-----------+-----------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
+| 3         | Added condition (scientific track only) | Three conditions: Control, Human Tutor, and ChatGPT 3.5.                                                        | Replace GPT3.5 with a newer Gemini model help for participants for the same five practice problems.                                                         | Examine whether a newer AI model produces more effective instructional support than GPT-3.5. |
++-----------+-----------------------------------------+-----------------------------------------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------+
 
 Everything not listed above is identical to Phase 1.
 
 ## Power and sample
 
-::: {.callout-tip icon="false"}
-## Guidance
+The plan is to recruit up to 70 participants through Prolific, randomly assigning them to three conditions: Control, Human Tutor, and 2026 Gemini.
 
-Justify the Phase 2 sample, and **state how you expect the estimate and its precision to compare with Phase 1**. For an upgrade, plan the sample around the confidence interval you want; for a rescue, around the power to detect the original effect, or the smallest effect you would still consider a successful replication; for a scientific extension, around the power to detect the new comparison. Set `phase2_n_per_group` in the code below; the table uses Phase 1's estimate if you have it and the original's otherwise.
-:::
+I expect Gemini-generated hints, combined with reduced ceiling effects and increased engagement with hints, may produce a larger positive effect on learning than the ChatGPT 3.5 hints in Phase 1, although this remains uncertain. Because Gemini is a new condition, it is not possible to directly predict its effect from Phase 1. With approximately 22 participants per condition, the estimate 85% power to detect an effect as large as the original study's 26.4-percentage-point difference, but only 32% power to detect half that effect. I also expect the estimate to be less precise than in Phase 1, with an anticipated 95% confidence interval half-width of approximately ±17.3 percentage points, compared with ±15.4 points in Phase 1.
+
+Given the limited sample size, the results will provide evidence about whether Gemini-generated hints improve statistics learning compared with no authored hints.
 
 ```{r}
 #| label: phase2-power
-#| eval: false
-phase2_n_per_group <- 150   # planned analysed participants per condition in Phase 2
+#| eval: true
+phase2_n_per_group <- 22   # planned analysed participants per condition in Phase 2
 
 p1 <- if (have_data) key_effect(phase1$keep)
 sd_basis <- if (have_data && nrow(phase1$keep) > 2) {
@@ -852,19 +848,17 @@ tibble(`Effect to detect` = sprintf("%s: %.1f points", names(effects), effects),
          n = phase2_n_per_group, delta = .x, sd = sd_basis, sig.level = 0.05)$power), accuracy = 1),
        `Expected 95% CI half-width` = sprintf("±%.1f points",
          qt(0.975, 2 * phase2_n_per_group - 2) * sd_basis * sqrt(2 / phase2_n_per_group))) |>
-  knitr::kable(caption = sprintf("Phase 2 key test (ChatGPT − Control gain) at %d per condition, two-sided alpha = .05, SD of gains = %.1f.",
+  knitr::kable(caption = sprintf("Phase 2 key test (Gemini − Control gain) at %d per condition, two-sided alpha = .05, SD of gains = %.1f.",
                                  phase2_n_per_group, sd_basis))
 ```
 
 ## Analysis plan
 
-::: {.callout-tip icon="false"}
-## Guidance
+The primary analysis will examine whether Gemini-generated hints improve learning compared with the Control condition. As in Phase 1, learning gain will be calculated as post-test minus pre-test percentage-correct scores. I will use linear regression (`gain ~ condition`), with Control as the reference group, and report the estimated Gemini effect, 95% confidence interval, and p-value (α = .05).
 
-The confirmatory analysis for Phase 2, written before Phase 2 data collection. On the best-practices tracks this is normally the same key test as Phase 1, run on the Phase 2 data alone; say whether you will also report a pooled estimate across phases, and label it exploratory if so. On the scientific track, specify the test for the new comparison. Name the exclusion rule (unchanged unless it is in the Changes table) and list any exploratory measures.
+Participants must consent and complete all assessment and practice items. Exploratory analyses will examine hint use and time spent on practice problems. I will not pool data across phases because the AI model and procedures differ, but I may compare the results descriptively as an exploratory analysis.
 
-Run Phase 2 under a new `EXPERIMENT.id` in `experiment.js` (for example `smith2016-phase2`) and set `experiment_id_phase2` at the top of this file to match, so the two phases' data never mix.
-:::
+The exclusion criteria will remain unchanged from Phase 1, however I will require participants to open at least 1 hint and to be of a no statistics background. If they have a statistics background, they will be excluded.
 
 ## Results
 
@@ -886,12 +880,12 @@ if (!have_phase2) {
 ```{r}
 #| label: phase2-results
 #| eval: !expr have_phase2
-p2_stats <- key_effect(phase2$keep)
+p2_stats <- key_effect(phase2$keep, ai = "Gemini")
 cat(sprintf("Phase 2: %d consented, %d completed all items, %d analysed.\n",
             nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
 if (!is.null(p2_stats)) {
   p_text <- if (p2_stats$p < 0.001) "p < .001" else sprintf("p = %.3f", p2_stats$p)
-  cat(sprintf("Key comparison (ChatGPT − Control): %.1f points [%.1f, %.1f], t(%.0f) = %.2f, %s.\n",
+  cat(sprintf("Key comparison (Gemini − Control): %.1f points [%.1f, %.1f], t(%.0f) = %.2f, %s.\n",
               p2_stats$estimate, p2_stats$ci_low, p2_stats$ci_high, p2_stats$df,
               p2_stats$statistic, p_text))
 }

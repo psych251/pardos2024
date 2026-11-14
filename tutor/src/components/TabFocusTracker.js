@@ -11,9 +11,9 @@ export default function TabFocusTracker(props) {
     useEffect(() => {
         if (!firebase) return
         ;(async () => {
-            if (pathname.startsWith("/lessons/")) {
-                await firebase.submitFocusChange(windowFocused);
-            }
+            // Phase 2: log on every route. The study runs at "/" (or "/study"), so the original
+            // "/lessons/" check meant no focus events were ever recorded in Phase 1.
+            await firebase.submitFocusChange(windowFocused);
         })()
     }, [windowFocused, firebase, pathname])
 

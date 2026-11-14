@@ -1,0 +1,12 @@
+{
+    "id": "a7e2f19Entry1a",
+    "stepAnswer": [
+        "$$0.7$$"
+    ],
+    "problemType": "TextBox",
+    "stepTitle": "Click inside the answer box below, type 0.7, and press Submit.",
+    "stepBody": "",
+    "answerType": "arithmetic",
+    "variabilization": {},
+    "answerLatex": "$$0.7$$"
+}

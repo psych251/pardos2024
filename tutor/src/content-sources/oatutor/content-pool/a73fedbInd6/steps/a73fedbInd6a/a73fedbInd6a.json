@@ -1,0 +1,12 @@
+{
+    "id": "a73fedbInd6a",
+    "stepAnswer": [
+        "$$0.2$$"
+    ],
+    "problemType": "TextBox",
+    "stepTitle": "A bag contains $$6$$ red marbles numbered $$1$$ to $$6$$ and $$4$$ green marbles numbered $$1$$ to $$4$$. You pick one marble at random. What is the probability that it is green AND has an odd number?",
+    "stepBody": "",
+    "answerType": "arithmetic",
+    "variabilization": {},
+    "answerLatex": "$$0.2$$"
+}

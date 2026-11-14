@@ -9,16 +9,18 @@ import {
     consentText,
     DEBRIEF_PARAGRAPHS,
     EXPERIMENT,
+    ENTRY_LESSON_ID,
     INTRO_LESSON_ID,
     PHASE_INSTRUCTIONS,
     PHASES,
     PROLIFIC_COMPLETION_URL,
 } from "./studyConfig";
 
-const LESSON_PHASES = ["intro", "pretest", "practice", "posttest"];
+const LESSON_PHASES = ["intro", "entry", "pretest", "practice", "posttest"];
 
 const HEADER_TITLES = {
     intro: "Background questions",
+    entry: "Answer box practice",
     pretest: "Part 1 of 3",
     practice: "Part 2 of 3",
     posttest: "Part 3 of 3",
@@ -26,11 +28,12 @@ const HEADER_TITLES = {
 
 function lessonForPhase(phase, arm) {
     if (phase === "intro") return INTRO_LESSON_ID;
+    if (phase === "entry") return ENTRY_LESSON_ID;
     return ARMS[arm][phase];
 }
 
 function allStudyLessonIds() {
-    const ids = [INTRO_LESSON_ID];
+    const ids = [INTRO_LESSON_ID, ENTRY_LESSON_ID];
     Object.values(ARMS).forEach(a => ids.push(a.pretest, a.practice, a.posttest));
     return ids;
 }

@@ -1,0 +1,12 @@
+{
+    "id": "a73fedbInd4a",
+    "stepAnswer": [
+        "$$0.5$$"
+    ],
+    "problemType": "TextBox",
+    "stepTitle": "Let event B $$=$$ a library patron checks out a book. Let event D $$=$$ the patron checks out a DVD. Suppose P(B) $$=$$ $$0.40$$, P(D) $$=$$ $$0.30$$, and P(B AND D) $$=$$ $$0.20$$. What is P(D|B)?",
+    "stepBody": "",
+    "answerType": "arithmetic",
+    "variabilization": {},
+    "answerLatex": "$$0.5$$"
+}

@@ -4,7 +4,7 @@
         "type": "hint",
         "dependencies": [],
         "title": "Worked Solution",
-        "text": "The formula for conditional probability is:\\nP(A|B) $$=$$ P(A AND B)/P(B)\\nUsing this formula, we can calculate P(D|C) as follows:\\nP(D|C) $$=$$ P(C AND D)/P(C)\\n$$=\\frac{0.225}{0.75}$$\\n$$=0.3$$\\nSo, $$P(D|C)=0.3$$.",
+        "text": "To find $$P(D\\vert{}C)$$, identify the conditional probability definition $$P(D\\vert{}C) = \\frac{P(C \\text{ AND } D)}{P(C)}$$, where the condition $$C$$ becomes the new sample space denominator. Plugging in the joint probability $$P(C \\text{ AND } D) = 0.225$$ and the conditioning probability $$P(C) = 0.75$$ gives $$\\frac{0.225}{0.75}$$, which simplifies to 0.3.",
         "variabilization": {},
         "oer": "https://OATutor.io <OATutor>",
         "license": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>"

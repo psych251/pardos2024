@@ -4,7 +4,7 @@
         "type": "hint",
         "dependencies": [],
         "title": "Worked Solution",
-        "text": "No, events A and B are not independent in this scenario because P(A AND B) does not equal $$P\\left(A\\right) P\\left(B\\right)$$. In order for events A and B to be independent, P(A AND B) must equal $$P\\left(A\\right) P\\left(B\\right)$$. Since P(A AND B) $$=$$ $$0.1$$ and $$P\\left(A\\right) P\\left(B\\right)=0.25$$, A and B are not independent.",
+        "text": "To check whether events $$A$$ and $$B$$ are independent, compare the given joint probability $$P(A \\text{ AND } B)$$ against the product of their individual probabilities $$P(A) \\cdot P(B)$$. Because $$0.5 \\cdot 0.5 = 0.25$$ does not equal the observed $$P(A \\text{ AND } B) = 0.1$$, knowing one event occurred changes the likelihood of the other, so the answer is No.",
         "variabilization": {},
         "oer": "https://OATutor.io <OATutor>",
         "license": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>"

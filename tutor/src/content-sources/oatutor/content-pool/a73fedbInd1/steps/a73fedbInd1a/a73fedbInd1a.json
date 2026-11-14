@@ -1,12 +1,12 @@
 {
     "id": "a73fedbInd1a",
     "stepAnswer": [
-        "$$0.5$$"
+        "$$0$$"
     ],
     "problemType": "TextBox",
-    "stepTitle": "Flip two fair coins. What is the probability that the two faces of our coins are the same? {HH, TT}",
+    "stepTitle": "Let E and F be mutually exclusive events. Suppose P(E) $$=$$ $$0.4$$ and P(F) $$=$$ $$0.5$$. What is P(E|F)?",
     "stepBody": "",
     "answerType": "arithmetic",
     "variabilization": {},
-    "answerLatex": "$$0.5$$"
+    "answerLatex": "$$0$$"
 }

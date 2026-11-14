@@ -1,0 +1,49 @@
+{
+  "purpose": "Phase 2 stimuli: worked-solution hints for the AI arm's five practice problems (Statistics, OpenStax 3.2), replacing the original study's stored ChatGPT 3.5 worked solutions.",
+  "model": "Gemini Hydrogen (as reported by the experimenter; confirm the exact label shown in the Gemini model picker)",
+  "date_generated": "2026-11-14",
+  "procedure": "Following Pardos & Bhandari (2024, p. 6): each practice problem's text (problem header, body, step header, step body) was pasted on its own into a new Gemini chat with no other instructions; the response was copied with Gemini's Copy button. Responses were checked on the original's three criteria (correct final answer, correct work, appropriate language). All five passed on the attempt recorded here.",
+  "formatting_changes": "Only formatting needed by OATutor: $...$ changed to $$...$$ and markdown bold markers (**) removed. Wording unchanged.",
+  "problems": [
+    {
+      "practice_problem": 1,
+      "oatutor_id": "a5bce96Ind1",
+      "answer_key": "0.3",
+      "prompt": "Probabilities Determine the probability of the following situation: Let event C = taking an English class. Let event D = taking a speech class. Suppose P(C) = 0.75, P(D) = 0.3, P(C|D) = 0.75 and P(C AND D) = 0.225. What is P(D|C)?",
+      "gemini_response_raw": "To find $P(D\\vert{}C)$, identify the conditional probability definition $P(D\\vert{}C) = \\frac{P(C \\text{ AND } D)}{P(C)}$, where the condition $C$ becomes the new sample space denominator. Plugging in the joint probability $P(C \\text{ AND } D) = 0.225$ and the conditioning probability $P(C) = 0.75$ gives $\\frac{0.225}{0.75}$, which simplifies to **0.3**.",
+      "text_in_tutor": "To find $$P(D\\vert{}C)$$, identify the conditional probability definition $$P(D\\vert{}C) = \\frac{P(C \\text{ AND } D)}{P(C)}$$, where the condition $$C$$ becomes the new sample space denominator. Plugging in the joint probability $$P(C \\text{ AND } D) = 0.225$$ and the conditioning probability $$P(C) = 0.75$$ gives $$\\frac{0.225}{0.75}$$, which simplifies to 0.3."
+    },
+    {
+      "practice_problem": 2,
+      "oatutor_id": "a5bce96Ind2",
+      "answer_key": "1",
+      "prompt": "Probabilities Determine the probability of the following situation: Mark is deciding which route to take to work. His choices are I = the Interstate and F = Fifth Street. He knows that P(I) = .44, P(F) = .56, and P(I and F) = 0 [since he can only take one route to work]. What is the probability of P(I or F)?",
+      "gemini_response_raw": "To calculate $P(I \\text{ or } F)$, apply the general addition rule $P(I \\text{ or } F) = P(I) + P(F) - P(I \\text{ and } F)$ to account for any overlap between the two route choices. Since Mark can only take one route and $P(I \\text{ and } F) = 0$, the events are mutually exclusive, so adding $0.44 + 0.56 - 0$ results in **1**.",
+      "text_in_tutor": "To calculate $$P(I \\text{ or } F)$$, apply the general addition rule $$P(I \\text{ or } F) = P(I) + P(F) - P(I \\text{ and } F)$$ to account for any overlap between the two route choices. Since Mark can only take one route and $$P(I \\text{ and } F) = 0$$, the events are mutually exclusive, so adding $$0.44 + 0.56 - 0$$ results in 1."
+    },
+    {
+      "practice_problem": 3,
+      "oatutor_id": "a5bce96Ind3",
+      "answer_key": "No",
+      "prompt": "Independent or Not? Determine if events A and B are independent: Let event A = eating Lunch. Let event B = eating Dinner. Then A AND B = eating Lunch and Dinner. Suppose P(A) = 0.5 and P(B) = 0.5. P(A AND B) = 0.1. Are events A and B independent?",
+      "gemini_response_raw": "To check whether events $A$ and $B$ are independent, compare the given joint probability $P(A \\text{ AND } B)$ against the product of their individual probabilities $P(A) \\cdot P(B)$. Because $0.5 \\cdot 0.5 = 0.25$ does not equal the observed $P(A \\text{ AND } B) = 0.1$, knowing one event occurred changes the likelihood of the other, so the answer is **No**.",
+      "text_in_tutor": "To check whether events $$A$$ and $$B$$ are independent, compare the given joint probability $$P(A \\text{ AND } B)$$ against the product of their individual probabilities $$P(A) \\cdot P(B)$$. Because $$0.5 \\cdot 0.5 = 0.25$$ does not equal the observed $$P(A \\text{ AND } B) = 0.1$$, knowing one event occurred changes the likelihood of the other, so the answer is No."
+    },
+    {
+      "practice_problem": 4,
+      "oatutor_id": "a5bce96Ind4",
+      "answer_key": "0.25",
+      "prompt": "Mutually Exclusive Events Determine the probability of the following situation: Flip two fair coins. What is the probability we get at least one tail, and both of our faces are the same?",
+      "gemini_response_raw": "To determine the probability of getting at least one tail and matching faces when flipping two fair coins, write out the full sample space $\\{HH, HT, TH, TT\\}$ and look for the intersection of both criteria. Out of the four equally likely outcomes, only $\\{TT\\}$ has both faces identical while containing at least one tail, giving $\\frac{1}{4}$ or **0.25**.",
+      "text_in_tutor": "To determine the probability of getting at least one tail and matching faces when flipping two fair coins, write out the full sample space $$\\{HH, HT, TH, TT\\}$$ and look for the intersection of both criteria. Out of the four equally likely outcomes, only $$\\{TT\\}$$ has both faces identical while containing at least one tail, giving $$\\frac{1}{4}$$ or 0.25."
+    },
+    {
+      "practice_problem": 5,
+      "oatutor_id": "a5bce96Ind5",
+      "answer_key": "Without Replacement",
+      "prompt": "Sampling With or Without Replacement Determine whether or not the following situation samples with or without replacement. You have a fair, well-shuffled deck of 52 cards. It consists of four suits. The suits are clubs, diamonds, hearts and spades. There are 13 cards in each suit consisting of 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, J (jack), Q (queen), K (king) of that suit. Suppose you pick three cards without replacement. The first card you pick out of the 52 cards is the K of hearts. You put this card aside and pick the second card from the 51 cards remaining in the deck. It is the three of diamonds. You put this card aside and pick the third card from the remaining 50 cards in the deck. The third card is the J of spades. Your picks are {K of hearts, three of diamonds, J of spades}.",
+      "gemini_response_raw": "To identify the sampling method, track whether selected items are returned to the population before the next selection is made. Here, each drawn card is explicitly set aside rather than placed back into the deck—shrinking the remaining pool from 52 to 51 and then 50 cards—which defines sampling **Without Replacement**.",
+      "text_in_tutor": "To identify the sampling method, track whether selected items are returned to the population before the next selection is made. Here, each drawn card is explicitly set aside rather than placed back into the deck—shrinking the remaining pool from 52 to 51 and then 50 cards—which defines sampling Without Replacement."
+    }
+  ]
+}

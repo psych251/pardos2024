@@ -4,7 +4,7 @@
         "type": "hint",
         "dependencies": [],
         "title": "Worked Solution",
-        "text": "The probability of P(I or F) is 1-P(not I and not F). Since P(I and F) $$=$$ $$0$$, this means P(not I and not F) $$=$$ $$0$$. Therefore, P(I or F) $$=$$ $$1-0$$ $$=$$ $$1$$.",
+        "text": "To calculate $$P(I \\text{ or } F)$$, apply the general addition rule $$P(I \\text{ or } F) = P(I) + P(F) - P(I \\text{ and } F)$$ to account for any overlap between the two route choices. Since Mark can only take one route and $$P(I \\text{ and } F) = 0$$, the events are mutually exclusive, so adding $$0.44 + 0.56 - 0$$ results in 1.",
         "variabilization": {},
         "oer": "https://OATutor.io <OATutor>",
         "license": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>"

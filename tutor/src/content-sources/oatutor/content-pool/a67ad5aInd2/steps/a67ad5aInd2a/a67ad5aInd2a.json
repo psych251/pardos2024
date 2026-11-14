@@ -1,15 +1,12 @@
 {
     "id": "a67ad5aInd2a",
     "stepAnswer": [
-        "Yes"
+        "$$0.4$$"
     ],
-    "problemType": "MultipleChoice",
-    "stepTitle": "KH, KH, KH, KH.",
+    "problemType": "TextBox",
+    "stepTitle": "Let Q and R be independent events. Suppose P(Q) $$=$$ $$0.5$$ and P(Q AND R) $$=$$ $$0.2$$. What is P(R)?",
     "stepBody": "",
-    "answerType": "string",
+    "answerType": "arithmetic",
     "variabilization": {},
-    "choices": [
-        "Yes",
-        "No"
-    ]
+    "answerLatex": "$$0.4$$"
 }

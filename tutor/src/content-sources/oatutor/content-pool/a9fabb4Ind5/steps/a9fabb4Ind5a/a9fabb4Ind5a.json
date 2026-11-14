@@ -1,0 +1,12 @@
+{
+    "id": "a9fabb4Ind5a",
+    "stepAnswer": [
+        "$$0.75$$"
+    ],
+    "problemType": "TextBox",
+    "stepTitle": "You draw two cards from a fair, well-shuffled deck of $$52$$ cards with replacement: you draw a card, put it back, shuffle, and draw a second card. Half of the cards are black. What is the probability that at least one of the two cards is black?",
+    "stepBody": "",
+    "answerType": "arithmetic",
+    "variabilization": {},
+    "answerLatex": "$$0.75$$"
+}

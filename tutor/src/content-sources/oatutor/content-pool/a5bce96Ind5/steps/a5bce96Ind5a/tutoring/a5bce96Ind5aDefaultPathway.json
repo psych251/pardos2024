@@ -4,7 +4,7 @@
         "type": "hint",
         "dependencies": [],
         "title": "Worked Solution",
-        "text": "In this situation, the cards are being picked without replacement. This means that once a card is chosen and removed from the deck, it is not put back in the deck before the next card is chosen. Therefore, the number of cards in the deck decreases as each card is chosen. In this case, the first card is chosen from a deck of $$52$$ cards, the second card is chosen from a deck of $$51$$ cards, and the third card is chosen from a deck of $$50$$ cards.",
+        "text": "To identify the sampling method, track whether selected items are returned to the population before the next selection is made. Here, each drawn card is explicitly set aside rather than placed back into the deck—shrinking the remaining pool from 52 to 51 and then 50 cards—which defines sampling Without Replacement.",
         "variabilization": {},
         "oer": "https://OATutor.io <OATutor>",
         "license": "https://creativecommons.org/licenses/by/4.0/ <CC BY 4.0>"

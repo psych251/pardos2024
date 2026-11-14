@@ -1,0 +1,41 @@
+{
+  "note": "Phase 2 pre/post test items (identical in all arms; pre = post). Adapted from OpenStax Introductory Statistics 2e, section 3.2, CC BY 4.0.",
+  "items": [
+    {
+      "n": 1,
+      "source": "OpenStax 3.2 Practice Exercise 40",
+      "question": "Let E and F be mutually exclusive events. Suppose P(E) = 0.4 and P(F) = 0.5. What is P(E|F)?",
+      "answer": "0"
+    },
+    {
+      "n": 2,
+      "source": "OpenStax 3.2 Practice Exercise 43 (numbers changed)",
+      "question": "Let Q and R be independent events. Suppose P(Q) = 0.5 and P(Q AND R) = 0.2. What is P(R)?",
+      "answer": "0.4"
+    },
+    {
+      "n": 3,
+      "source": "OpenStax 3.2 Practice Exercise 42",
+      "question": "Let U and V be mutually exclusive events. Suppose P(U) = 0.26 and P(V) = 0.37. What is P(U OR V)?",
+      "answer": "0.63"
+    },
+    {
+      "n": 4,
+      "source": "OpenStax 3.2 Try It 3.10",
+      "question": "Let event B = a library patron checks out a book. Let event D = the patron checks out a DVD. Suppose P(B) = 0.40, P(D) = 0.30, and P(B AND D) = 0.20. What is P(D|B)?",
+      "answer": "0.5"
+    },
+    {
+      "n": 5,
+      "source": "OpenStax 3.2 Try It 3.6",
+      "question": "You draw two cards from a fair, well-shuffled deck of 52 cards with replacement: you draw a card, put it back, shuffle, and draw a second card. Half of the cards are black. What is the probability that at least one of the two cards is black?",
+      "answer": "0.75"
+    },
+    {
+      "n": 6,
+      "source": "OpenStax 3.2 Try It 3.9",
+      "question": "A bag contains 6 red marbles numbered 1 to 6 and 4 green marbles numbered 1 to 4. You pick one marble at random. What is the probability that it is green AND has an odd number?",
+      "answer": "0.2"
+    }
+  ]
+}
