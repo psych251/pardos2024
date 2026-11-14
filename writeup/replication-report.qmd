@@ -832,7 +832,7 @@ Given the limited sample size, the results will provide evidence about whether G
 ```{r}
 #| label: phase2-power
 #| eval: true
-phase2_n_per_group <- 22   # planned analysed participants per condition in Phase 2
+phase2_n_per_group <- 23   # planned analysed participants per condition in Phase 2 (70 total / 3 conditions)
 
 p1 <- if (have_data) key_effect(phase1$keep)
 sd_basis <- if (have_data && nrow(phase1$keep) > 2) {
