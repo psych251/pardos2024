@@ -140,3 +140,14 @@ export function getSavedPhase() {
 export function savePhase(phase) {
     safeSet(PHASE_KEY_PREFIX + studyContext.session_key, phase);
 }
+
+// Phase 2 screening: the participant's first answer to the screening question.
+const SCREEN_KEY_PREFIX = "pardos-replication-screen-";
+
+export function getScreenAnswer() {
+    return safeGet(SCREEN_KEY_PREFIX + studyContext.session_key);
+}
+
+export function saveScreenAnswer(answer) {
+    if (getScreenAnswer() == null) safeSet(SCREEN_KEY_PREFIX + studyContext.session_key, answer);
+}

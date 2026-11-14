@@ -8,8 +8,8 @@
  * becomes one "trial" row with a `task` column, so the template's export produces a normal
  * long-format trials.csv.
  */
-import studyContext, { getStudyMeta, USE_EMULATOR } from "./studyContext";
-import { EXPERIMENT } from "./studyConfig";
+import studyContext, { getStudyMeta, saveScreenAnswer, USE_EMULATOR } from "./studyContext";
+import { EXPERIMENT, SCREENING } from "./studyConfig";
 
 let saver = null;
 let trialIndex = 0;
@@ -55,6 +55,9 @@ export function logEvent(task, fields = {}) {
         ...getStudyMeta(),
         ...fields,
     });
+    if (task === "answer" && fields.stepID === SCREENING.stepId && fields.input != null) {
+        saveScreenAnswer(String(fields.input));
+    }
 }
 
 export function updateParticipant(fields) {

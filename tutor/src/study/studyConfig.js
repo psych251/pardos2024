@@ -61,7 +61,11 @@ export const EXPERIMENT = {
     save_full_data_at_end: true,
 
     // From your Prolific study page. Empty = no redirect (pilots, local testing).
-    prolific_completion_code: "CO2XQRNO",
+    prolific_completion_code: "",
+
+    // Phase 2 in-study screening (Prolific "custom screening"): the code Prolific gives for
+    // the screened-out path. Empty = no redirect (pilots, local testing).
+    prolific_screenout_code: "",
 
     // Contact shown in consent, debrief and the download fallback. The course consent
     // text may only be changed in this address.
@@ -73,6 +77,17 @@ export const EXPERIMENT = {
 
 export const PROLIFIC_COMPLETION_URL =
     `https://app.prolific.com/submissions/complete?cc=${EXPERIMENT.prolific_completion_code}`;
+export const PROLIFIC_SCREENOUT_URL =
+    `https://app.prolific.com/submissions/complete?cc=${EXPERIMENT.prolific_screenout_code}`;
+
+// Phase 2: participants who have taken a statistics course are screened out after the
+// background questions, before the pre-test (so before any condition-specific help). The
+// first answer to "Have you taken a statistics course before?" decides. Add
+// "Prefer not to say" to screenOutAnswers to screen those participants out too.
+export const SCREENING = {
+    stepId: "ae7a9f0IntroStats2a",
+    screenOutAnswers: ["Yes"],
+};
 
 // Instructions shown before each phase. Wording is identical across arms.
 export const PHASE_INSTRUCTIONS = {
@@ -116,6 +131,13 @@ export const consentText = (email) =>
     "any or all of the following questions. You may decline further participation, at any time, " +
     "without adverse consequences. Your anonymity is assured; the researchers who have requested " +
     "your participation will not receive any personal information about you.";
+
+// TODO (student): review this wording; it is participant-facing study material.
+export const SCREENED_OUT_PARAGRAPHS = [
+    "Thank you for answering these questions. This study is looking for people who have not " +
+    "taken a statistics course, so it ends here for you.",
+    "You will be paid for the time you spent on the screening questions.",
+];
 
 // TODO (student): review and edit this wording; it is participant-facing study material.
 export const DEBRIEF_PARAGRAPHS = [

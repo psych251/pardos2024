@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useRef, useState } from "rea
 import { AppBar, Button, Paper, Toolbar, Typography } from "@material-ui/core";
 import Platform from "../platform-logic/Platform.js";
 import { LESSON_PROGRESS_STORAGE_KEY, PROGRESS_STORAGE_KEY, ThemeContext } from "../config/config.js";
-import studyContext, { getSavedPhase, isFreshSession, savePhase, USE_EMULATOR } from "./studyContext";
+import studyContext, { getSavedPhase, getScreenAnswer, isFreshSession, savePhase, USE_EMULATOR } from "./studyContext";
 import { getSaver, logEvent, updateParticipant } from "./saver";
 import {
     ARMS,
@@ -14,6 +14,9 @@ import {
     PHASE_INSTRUCTIONS,
     PHASES,
     PROLIFIC_COMPLETION_URL,
+    PROLIFIC_SCREENOUT_URL,
+    SCREENED_OUT_PARAGRAPHS,
+    SCREENING,
 } from "./studyConfig";
 
 const LESSON_PHASES = ["intro", "entry", "pretest", "practice", "posttest"];
@@ -107,6 +110,14 @@ export default function StudyFlow(props) {
         if (lessonId !== lessonForPhase(phase, studyContext.study_arm)) return;
         advancing.current = true;
         logEvent("phase_complete", { phase, lessonId });
+        // Phase 2 screening: after the background questions, before the pre-test.
+        const screenAnswer = getScreenAnswer();
+        if (phase === "intro" && SCREENING.screenOutAnswers.includes(screenAnswer)) {
+            logEvent("screened_out", { screen_answer: screenAnswer });
+            updateParticipant({ screened_out: true });
+            goToPhase("screened_out");
+            return;
+        }
         goToPhase(PHASES[PHASES.indexOf(phase) + 1]);
     }, [phase, goToPhase]);
 
@@ -123,6 +134,18 @@ export default function StudyFlow(props) {
             window.location.href = PROLIFIC_COMPLETION_URL;
         }
     }, []);
+
+    // Screened out (Phase 2): save, then return to Prolific on the screened-out path.
+    const finishScreenedOut = async () => {
+        if (finishing.current) return;
+        finishing.current = true;
+        const saver = getSaver();
+        const result = saver ? await saver.finish(null) : { ok: false };
+        setFinishResult(result);
+        if (result.ok && EXPERIMENT.prolific_screenout_code && !USE_EMULATOR && !studyContext.is_preview) {
+            window.location.href = PROLIFIC_SCREENOUT_URL;
+        }
+    };
 
     if (!ready) {
         return <div style={pageStyle}><SimpleHeader/><center><h3>Loading…</h3></center></div>;
@@ -226,6 +249,10 @@ export default function StudyFlow(props) {
         return <CompleteScreen finish={finish} result={finishResult}/>;
     }
 
+    if (phase === "screened_out") {
+        return <ScreenedOutScreen finish={finishScreenedOut} result={finishResult}/>;
+    }
+
     if (LESSON_PHASES.includes(phase) && showInstructions) {
         const ins = PHASE_INSTRUCTIONS[phase];
         return (
@@ -251,6 +278,29 @@ export default function StudyFlow(props) {
                   saveProgress={props.saveProgress}
                   loadBktProgress={props.loadBktProgress}
                   removeProgress={props.removeProgress}/>
+    );
+}
+
+function ScreenedOutScreen({ finish, result }) {
+    useEffect(() => {
+        finish();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const code = EXPERIMENT.prolific_screenout_code;
+    const redirecting = result && result.ok && code && !USE_EMULATOR && !studyContext.is_preview;
+    return (
+        <Card>
+            <div id="screened-out-message">
+                <Typography variant="h5" gutterBottom>Thank you</Typography>
+                {SCREENED_OUT_PARAGRAPHS.map((p, i) => <Typography key={i} paragraph>{p}</Typography>)}
+                {!result && <Typography>Saving your responses…</Typography>}
+                {redirecting && <Typography>Saved. Returning you to Prolific…</Typography>}
+                {result && !redirecting && code && (
+                    <Typography paragraph>Your code is <strong>{code}</strong>.</Typography>
+                )}
+            </div>
+        </Card>
     );
 }
 

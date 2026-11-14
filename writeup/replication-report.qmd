@@ -204,6 +204,8 @@ read_phase <- function(id, labels = condition_labels, items = n_items) {
               is_preview = any(is_preview %in% TRUE),
               consented = any(task == "consent" & toupper(consented) == "TRUE"),
               declined = any(task == "consent" & toupper(consented) == "FALSE"),
+              # Phase 2: screened out after the background questions (prior statistics course)
+              screened_out = any(task == "screened_out"),
               n_page_loads = n_distinct(participant_id),
               .groups = "drop") |>
     mutate(condition = factor(labels[condition_code], levels = labels)) |>
@@ -218,7 +220,8 @@ read_phase <- function(id, labels = condition_labels, items = n_items) {
   
   # Previews are visits without a Prolific id (for example, someone opening the live link).
   n_preview <- sum(people$is_preview & people$consented)
-  started  <- people |> filter(consented, !is_preview)
+  n_screened_out <- sum(people$screened_out & people$consented & !people$is_preview)
+  started  <- people |> filter(consented, !is_preview, !screened_out)
   complete <- started |> filter(items_pretest  >= items[["pretest"]],
                                 items_practice >= items[["practice"]],
                                 items_posttest >= items[["posttest"]])
@@ -229,7 +232,7 @@ read_phase <- function(id, labels = condition_labels, items = n_items) {
   
   list(participants = started, trials = trials, errors = errors, docs = docs,
        complete = complete, keep = keep, answers = answers,
-       n_preview = n_preview, n_unsupported = n_unsupported,
+       n_preview = n_preview, n_unsupported = n_unsupported, n_screened_out = n_screened_out,
        n_declined = sum(people$declined & !people$is_preview))
 }
 
@@ -881,8 +884,8 @@ if (!have_phase2) {
 #| label: phase2-results
 #| eval: !expr have_phase2
 p2_stats <- key_effect(phase2$keep, ai = "Gemini")
-cat(sprintf("Phase 2: %d consented, %d completed all items, %d analysed.\n",
-            nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
+cat(sprintf("Phase 2: %d screened out (prior statistics course); %d eligible and consented, %d completed all items, %d analysed.\n",
+            phase2$n_screened_out, nrow(phase2$participants), nrow(phase2$complete), nrow(phase2$keep)))
 if (!is.null(p2_stats)) {
   p_text <- if (p2_stats$p < 0.001) "p < .001" else sprintf("p = %.3f", p2_stats$p)
   cat(sprintf("Key comparison (Gemini − Control): %.1f points [%.1f, %.1f], t(%.0f) = %.2f, %s.\n",
