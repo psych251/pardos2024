@@ -52,7 +52,7 @@ export const EXPERIMENT = {
     // Firestore path: experiments/<id>/participants/... Change it between phases so pilot
     // and real data never mix (pardos2024-pilot-a -> pardos2024-pilot-b -> pardos2024-stats),
     // and keep `experiment_id` at the top of writeup/replication-report.qmd the same.
-    id: "pardos2024-phase2-pilot",
+    id: "pardos2024-stats-phase2",
 
     // Events per Firestore write. A full session logs about 60 events.
     chunk_size: 5,
@@ -61,11 +61,11 @@ export const EXPERIMENT = {
     save_full_data_at_end: true,
 
     // From your Prolific study page. Empty = no redirect (pilots, local testing).
-    prolific_completion_code: "",
+    prolific_completion_code: "CO2XQRNO",
 
     // Phase 2 in-study screening (Prolific "custom screening"): the code Prolific gives for
     // the screened-out path. Empty = no redirect (pilots, local testing).
-    prolific_screenout_code: "",
+    prolific_screenout_code: "C19ZMPTR",
 
     // Contact shown in consent, debrief and the download fallback. The course consent
     // text may only be changed in this address.
